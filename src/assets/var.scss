@@ -1,0 +1,41 @@
+@use 'sass:map';
+
+$background-color: #f3f4f7;
+
+$topbar-size: () !default;
+$topbar-size: map.merge(
+  (
+    height: 5rem
+  ),
+  $topbar-size
+);
+
+$sidebar-size: () !default;
+$sidebar-size: map.merge(
+  (
+    width: 22rem
+  ),
+  $sidebar-size
+);
+
+$theme-dark-color: () !default;
+$theme-dark-color: map.deep-merge(
+  (
+    'background': (
+      'darker': #151822,
+      'base': #1e222d,
+      'light': #262f3e,
+      'lighter': #344258
+    ),
+    'text': (
+      'primary': black,
+      'regular': #606266,
+      'secondary': #909399,
+      'placeholder': #A8ABB2,
+      'disabled': #C0C4CC
+    )
+  ),
+  $theme-dark-color
+);
+
+

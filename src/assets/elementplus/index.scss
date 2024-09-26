@@ -1,0 +1,42 @@
+@use 'element-plus/theme-chalk/src/mixins/function.scss' as *;
+
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'primary': (
+      'base': #06f
+    ),
+    'success': (
+      'base': #19be6b
+    ),
+    'warning': (
+      'base': #ff9900
+    ),
+    'danger': (
+      'base': #ed4014
+    ),
+    'error': (
+      'base': #ed4014
+    )
+  ),
+
+  $button: (
+    'font-weight': 'normal'
+  ),
+
+  $table: (
+    'text-color': getCssVar('text-color-primary')
+  ),
+
+  $pagination: (
+    'button-disabled-bg-color': getCssVar('fill-color-dark'),
+    'button-bg-color': getCssVar('fill-color-blank'),
+    'hover-color': getCssVar('color-primary')
+    
+  ),
+
+  $text-color: (
+    'primary': #303133,
+    'regular': #303133
+    // 'regular': #606266
+  )
+);
