@@ -5,8 +5,6 @@ const locale = zhCn
 
 <template>
   <el-config-provider size="default" :button="{ autoInsertSpace: true }" :locale="locale">
-    <el-button type="primary">test</el-button>
-    <el-button type="success">成功</el-button>
     <router-view />
   </el-config-provider>
 </template>
