@@ -6,13 +6,20 @@ import _ from 'lodash'
 import copy from 'copy-text-to-clipboard'
 import XLSX from 'xlsx'
 import Ajv from 'ajv'
+import { diff } from 'deep-diff'
 
-let step = ref('2')
-let databaseName = ref('')
+let step = ref('3')
+let sourceDatabaseName = ref('')
+let sourceDatabaseRemark = ref('')
+let targetDatabaseName = ref('')
+let targetDatabaseRemark = ref('')
 let tableNameType = ref('全部表')
-let tableNames = ref([])
-let sourceName = ref('测试环境')
-let targetName = ref('线上环境')
+let tableNames = ref([
+  {
+    id: Math.random().toString(),
+    name: ''
+  }
+])
 let sourceTables = ref([])
 let sourceTablesFile = ref(null)
 let sourceColumns = ref([])
@@ -63,11 +70,19 @@ function removeTableName(index) {
 }
 
 function step1Next() {
-  if (_.trim(databaseName.value) === '') {
+  if (_.trim(sourceDatabaseName.value) === '') {
     ElMessage({
       type: 'warning',
       grouping: true,
-      message: '未提供数据库'
+      message: '未提供源数据库名'
+    })
+    return
+  }
+  if (_.trim(targetDatabaseName.value) === '') {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '未提供目标数据库名'
     })
     return
   }
@@ -115,75 +130,6 @@ function step2Prev() {
   step.value = '1'
 }
 
-function step2Next() {
-  let sTables = tables(sourceTables.value, sourceColumns.value, sourceIndexes.value)
-  let tTables = tables(targetTables.value, targetColumns.value, targetIndexes.value)
-  console.dir(sTables)
-  console.dir(tTables)
-}
-
-function tables(originalTables, originalColumns, originalIndexes) {
-  return _.map(
-    _.orderBy(
-      _.filter(originalTables, (t) => t.tableType === 'BASE TABLE'),
-      (t) => t.tableName
-    ),
-    (t) => {
-      let columns = _.map(
-        _.orderBy(
-          _.filter(originalColumns, (c) => c.tableName === t.tableName),
-          (c) => c.ordinalPosition
-        ),
-        (c) => {
-          return {
-            columnName: c.columnName,
-            ordinalPosition: c.ordinalPosition,
-            coloumnDefault: c.columnDefault,
-            isNullable: c.isNullable,
-            dataType: c.dataType,
-            characterMaximumLength: c.characterMaximumLength,
-            numericPercision: c.numericPercision,
-            numericScale: c.numericScale,
-            characterSetName: c.characterSetName,
-            collationName: c.collationName,
-            extra: c.extra,
-            columnComment: c.columnComment
-          }
-        }
-      )
-
-      let indexes = _.map(
-        _.groupBy(
-          _.filter(originalIndexes, (i) => i.tableName === t.tableName),
-          (i) => i.indexName
-        ),
-        (items, indexName) => {
-          let item = items[0]
-          return {
-            indexName,
-            indexType: item.indexType,
-            nonUnique: item.nonUnique,
-            columns: _.map(items, (t) => {
-              return {
-                columnName: t.columnName,
-                seqInIndex: t.seqInIndex,
-                collation: t.collation
-              }
-            })
-          }
-        }
-      )
-
-      return {
-        tableName: t.tableName,
-        tableComment: t.tableComment,
-        columns,
-        indexes
-      }
-    }
-  )
-}
-
 function fileOnClick(isSource, type) {
   if (isSource) {
     if (type === 'tables') {
@@ -204,8 +150,8 @@ function fileOnClick(isSource, type) {
   }
 }
 
-function copySqlOnClick(type) {
-  let database = databaseName.value
+function copySqlOnClick(isSource, type) {
+  let database = isSource ? sourceDatabaseName.value : targetDatabaseName.value
   let whereSql = ''
   let tableNamesStr = _.map(validTableNames.value, (n) => `'${n}'`).join(', ')
   if (isIncludeTable.value) {
@@ -234,6 +180,7 @@ function copySqlOnClick(type) {
     \`COLUMN_NAME\` AS columnName,
     \`ORDINAL_POSITION\` AS ordinalPosition,
     \`COLUMN_DEFAULT\` AS columnDefault,
+    IF(\`COLUMN_DEFAULT\` IS NOT NULL, 'YES', 'NO') AS hasDefault,
     \`IS_NULLABLE\` AS isNullable,
     \`DATA_TYPE\` AS dataType,
     \`CHARACTER_MAXIMUM_LENGTH\` AS characterMaximumLength,
@@ -338,6 +285,7 @@ function validateColumnsSchema(columns) {
         columnName: {},
         ordinalPosition: {},
         columnDefault: {},
+        hasDefault: {},
         isNullable: {},
         dataType: {},
         characterMaximumLength: {},
@@ -462,7 +410,6 @@ function fileOnChange(isSource, type) {
         } else {
           targetIndexes.value = json
         }
-        console.dir(json)
       }
       message = '索引信息文件数据结构无效'
     }
@@ -477,15 +424,322 @@ function fileOnChange(isSource, type) {
   })
 }
 
+function step2Next() {
+  if (!isSourceTablesReady.value) {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '源数据库表信息未提供'
+    })
+    return
+  }
+  if (!isSourceColumnsReady.value) {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '源数据库字段信息未提供'
+    })
+    return
+  }
+  if (!isSourceIndexesReady.value) {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '源数据库索引信息未提供'
+    })
+    return
+  }
+  if (!isTargetTablesReady.value) {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '目标数据库表信息未提供'
+    })
+    return
+  }
+  if (!isTargetColumnsReady.value) {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '目标数据库字段信息未提供'
+    })
+    return
+  }
+  if (!isTargetIndexesReady.value) {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '目标数据库索引信息未提供'
+    })
+    return
+  }
+
+  step.value = '3'
+  compare()
+}
+
+function tables(originalTables, originalColumns, originalIndexes) {
+  return _.map(
+    _.orderBy(
+      _.filter(originalTables, (t) => t.tableType === 'BASE TABLE'),
+      (t) => t.tableName
+    ),
+    (t) => {
+      let columns = _.map(
+        _.orderBy(
+          _.filter(originalColumns, (c) => c.tableName === t.tableName),
+          (c) => c.ordinalPosition
+        ),
+        (c) => {
+          return {
+            columnName: c.columnName,
+            ordinalPosition: c.ordinalPosition,
+            columnDefault: c.columnDefault === undefined ? '' : c.columnDefault,
+            hasDefault: c.hasDefault === 'YES',
+            isNullable: c.isNullable === 'YES',
+            dataType: c.dataType,
+            columnType: c.columnType,
+            characterMaximumLength: c.characterMaximumLength,
+            numericPercision: c.numericPercision,
+            numericScale: c.numericScale,
+            characterSetName: c.characterSetName,
+            collationName: c.collationName,
+            extra: c.extra === undefined ? '' : c.extra,
+            columnComment: c.columnComment
+          }
+        }
+      )
+
+      let indexes = _.map(
+        _.groupBy(
+          _.filter(originalIndexes, (i) => i.tableName === t.tableName),
+          (i) => i.indexName
+        ),
+        (items, indexName) => {
+          let item = items[0]
+          return {
+            indexName,
+            indexType: item.indexType,
+            nonUnique: item.nonUnique === '1',
+            columns: _.map(items, (t) => {
+              return {
+                columnName: t.columnName,
+                seqInIndex: t.seqInIndex,
+                collation: t.collation
+              }
+            })
+          }
+        }
+      )
+
+      return {
+        tableName: t.tableName,
+        tableComment: t.tableComment,
+        columns,
+        indexes
+      }
+    }
+  )
+}
+
+function compare() {
+  console.dir(
+    _.find(sourceColumns.value, (n) => n.tableName === 'axyg_group' && n.columnName === 'is_del')
+  )
+
+  let sTables = tables(sourceTables.value, sourceColumns.value, sourceIndexes.value)
+  let tTables = tables(targetTables.value, targetColumns.value, targetIndexes.value)
+
+  let sTablesDifferences = []
+  let tTablesDifferences = []
+
+  let sTableNames = _.map(sTables, (n) => n.tableName)
+  let tTableNames = _.map(tTables, (n) => n.tableName)
+  let allTableNames = _.orderBy(_.union(sTableNames, tTableNames))
+  _.forEach(allTableNames, (tn) => {
+    let sTable = _.find(sTables, (n) => n.tableName === tn)
+    let tTable = _.find(tTables, (n) => n.tableName === tn)
+
+    let sTableDifference = {}
+    let tTableDifference = {}
+    if (!sTable && tTable) {
+      sTableDifference.table = _.cloneDeep(tTable)
+      sTableDifference.table.tableDifferenceType = 'CREATE'
+
+      tTableDifference.table = tTable
+      tTableDifference.table.tableDifferenceType = 'DROP'
+    } else if (sTable && !tTable) {
+      sTableDifference.table = sTable
+      sTableDifference.table.tableDifferenceType = 'DROP'
+
+      tTableDifference.table = _.cloneDeep(sTable)
+      tTableDifference.table.tableDifferenceType = 'CREATE'
+    } else {
+      sTableDifference.table = {
+        tableDifferenceType: 'NONE',
+        tableName: sTable.tableName,
+        tableComment: sTable.tableComment,
+        tableCommentDifferenceType: 'NONE',
+        columns: [],
+        indexes: []
+      }
+      tTableDifference.table = {
+        tableDifferenceType: 'NONE',
+        tableName: tTable.tableName,
+        tableComment: tTable.tableComment,
+        tableCommentDifferenceType: 'NONE',
+        columns: [],
+        indexes: []
+      }
+
+      if (sTableDifference.table.tableComment !== tTableDifference.table.tableComment) {
+        sTableDifference.table.tableDifferenceType = 'ALERT'
+        sTableDifference.table.tableCommentDifferenceType = 'ALERT'
+        tTableDifference.table.tableDifferenceType = 'ALERT'
+        tTableDifference.table.tableCommentDifferenceType = 'ALERT'
+      }
+
+      let sTableColumnNames = _.map(sTable.columns, (sc) => sc.columnName)
+      let tTableColumnNames = _.map(tTable.columns, (tc) => tc.columnName)
+      let allColumnNames = _.orderBy(_.union(sTableColumnNames, tTableColumnNames))
+      _.forEach(allColumnNames, (cn) => {
+        let sColumn = _.find(sTable.columns, (sc) => sc.columnName === cn)
+        let tColumn = _.find(tTable.columns, (tc) => tc.columnName === cn)
+        if (!sColumn && tColumn) {
+          sTableDifference.table.columns.push({
+            ...tColumn,
+            columnDifferenceType: 'ADD'
+          })
+          sTableDifference.table.tableDifferenceType = 'ALERT'
+          tTableDifference.table.columns.push({
+            ...tColumn,
+            columnDifferenceType: 'DROP'
+          })
+          tTableDifference.table.tableDifferenceType = 'ALERT'
+          return
+        }
+
+        if (sColumn && !tColumn) {
+          sTableDifference.table.columns.push({
+            ...sColumn,
+            columnDifferenceType: 'DROP'
+          })
+          sTableDifference.table.tableDifferenceType = 'ALERT'
+          tTableDifference.table.columns.push({
+            ...sColumn,
+            columnDifferenceType: 'ADD'
+          })
+          tTableDifference.table.tableDifferenceType = 'ALERT'
+          return
+        }
+
+        let sc = {
+          ...sColumn,
+          columnDifferenceType: 'NONE'
+        }
+        let tc = {
+          ...tColumn,
+          columnDifferenceType: 'NONE'
+        }
+
+        let isDifferentColumn =
+          sColumn.hasDefault !== tColumn.hasDefault ||
+          (sColumn.hasDefault &&
+            tColumn.hasDefault &&
+            sColumn.columnDefault !== tColumn.columnDefault) ||
+          sColumn.isNullable !== tColumn.isNullable ||
+          sColumn.columnType !== tColumn.columnType ||
+          sColumn.extra !== tColumn.extra ||
+          sColumn.columnComment !== tColumn.columnComment
+        if (isDifferentColumn) {
+          sc.columnDifferenceType = 'CHANGE'
+          sc.change = _.cloneDeep(tColumn)
+          sTableDifference.table.tableDifferenceType = 'ALERT'
+          tc.columnDifferenceType = 'CHANGE'
+          tc.change = _.cloneDeep(sColumn)
+          tTableDifference.table.tableDifferenceType = 'ALERT'
+        }
+
+        sTableDifference.table.columns.push(sc)
+        tTableDifference.table.columns.push(tc)
+      })
+
+      let sTableIndexNames = _.map(sTable.indexes, (si) => si.indexName)
+      let tTableIndexNames = _.map(tTable.indexes, (ti) => ti.indexName)
+      let allIndexNames = _.orderBy(_.union(sTableIndexNames, tTableIndexNames))
+      _.forEach(allIndexNames, (iname) => {
+        let sIndex = _.find(sTable.indexes, (si) => si.indexName === iname)
+        let tIndex = _.find(tTable.indexes, (ti) => ti.indexName === iname)
+        if (!sIndex && tIndex) {
+          sTableDifference.table.indexes.push({
+            ...tIndex,
+            indexDifferenceType: 'ADD'
+          })
+          sTableDifference.table.tableDifferenceType = 'ALERT'
+          tTableDifference.table.indexes.push({
+            ...tIndex,
+            indexDifferenceType: 'DROP'
+          })
+          tTableDifference.table.tableDifferenceType = 'ALERT'
+          return
+        }
+
+        if (sIndex && !tIndex) {
+          sTableDifference.table.indexes.push({
+            ...sIndex,
+            indexDifferenceType: 'DROP'
+          })
+          sTableDifference.table.tableDifferenceType = 'ALERT'
+          tTableDifference.table.indexes.push({
+            ...sIndex,
+            indexDifferenceType: 'ADD'
+          })
+          tTableDifference.table.tableDifferenceType = 'ALERT'
+          return
+        }
+
+        let si = {
+          ...sIndex,
+          indexDifferenceType: 'NONE'
+        }
+        let ti = {
+          ...tIndex,
+          indexDifferenceType: 'NONE'
+        }
+        let isDifferentIndex = diff(sIndex, tIndex)
+        if (isDifferentIndex) {
+          si.indexDifferenceType = 'DROP_ADD'
+          si.add = _.cloneDeep(tIndex)
+          sTableDifference.table.tableDifferenceType = 'ALERT'
+          ti.indexDifferenceType = 'DROP_ADD'
+          ti.add = _.cloneDeep(sIndex)
+          tTableDifference.table.tableDifferenceType = 'ALERT'
+        }
+
+        sTableDifference.table.indexes.push(si)
+        tTableDifference.table.indexes.push(ti)
+      })
+    }
+
+    sTablesDifferences.push(sTableDifference)
+    tTablesDifferences.push(tTableDifference)
+  })
+
+  console.dir(sTables)
+  console.dir(tTables)
+  console.dir(sTablesDifferences)
+  console.dir(tTablesDifferences)
+}
+
 // step2 end
 
 // step3 begin
 
-function step3Prev() {}
+function step3Prev() {
+  step.value = '2'
+}
 
 // step3 end
-
-addTableName(0)
 </script>
 
 <template>
@@ -504,9 +758,31 @@ addTableName(0)
       <div class="step-container" :class="{ active: isStepActivated('1') }">
         <div class="step-content-container">
           <div class="step1-content">
-            <div class="block-title">数据库</div>
+            <div class="block-title">源数据库</div>
             <div class="block">
-              <el-input v-model="databaseName" :clearable="true"></el-input>
+              <el-input v-model="sourceDatabaseName" :clearable="true" placeholder="输入数据库名">
+                <template #prepend>名称</template>
+              </el-input>
+              <el-input
+                v-model="sourceDatabaseRemark"
+                :clearable="true"
+                placeholder="输入备注以便在差异展示时更容易区别数据库"
+              >
+                <template #prepend>备注</template>
+              </el-input>
+            </div>
+            <div class="block-title">目标数据库</div>
+            <div class="block">
+              <el-input v-model="targetDatabaseName" :clearable="true" placeholder="输入数据库名">
+                <template #prepend>名称</template>
+              </el-input>
+              <el-input
+                v-model="targetDatabaseRemark"
+                :clearable="true"
+                placeholder="输入备注以便在差异展示时更容易区别数据库"
+              >
+                <template #prepend>备注</template>
+              </el-input>
             </div>
             <div class="block-title">表</div>
             <div class="block">
@@ -517,7 +793,7 @@ addTableName(0)
               </el-radio-group>
               <template v-if="!isAllTable">
                 <div class="table-name-area" v-for="(item, index) in tableNames" :key="item.id">
-                  <el-input v-model="item.name" :clearable="true"></el-input>
+                  <el-input v-model="item.name" :clearable="true" placeholder="输入表名"></el-input>
                   <div class="table-name-button" title="删除">
                     <Minus @click="removeTableName(index)" />
                   </div>
@@ -538,12 +814,8 @@ addTableName(0)
       <div class="step-container" :class="{ active: isStepActivated('2') }">
         <div class="step-content-container step2-content-container">
           <div class="step2-content-left">
-            <div class="block-title">源数据库</div>
-            <div class="block">
-              <el-input v-model="sourceName"></el-input>
-            </div>
             <div class="block-title">
-              表信息<template v-if="isSourceTablesReady">
+              源数据库表信息<template v-if="isSourceTablesReady">
                 <span style="color: var(--el-color-success); margin: 0 1rem">已提供</span></template
               >
             </div>
@@ -551,7 +823,7 @@ addTableName(0)
               <el-button type="primary" @click="fileOnClick(true, 'tables')"
                 >选择文件 (仅支持 .csv 或 .xlsx)</el-button
               >
-              <el-button @click="copySqlOnClick('tables')">复制 SQL 去数据库查询</el-button>
+              <el-button @click="copySqlOnClick(true, 'tables')">复制 SQL 去数据库查询</el-button>
               <input
                 type="file"
                 ref="sourceTablesFile"
@@ -561,7 +833,7 @@ addTableName(0)
               />
             </div>
             <div class="block-title">
-              字段信息<template v-if="isSourceColumnsReady"
+              源数据库字段信息<template v-if="isSourceColumnsReady"
                 ><span style="color: var(--el-color-success); margin: 0 1rem"
                   >已提供</span
                 ></template
@@ -571,7 +843,7 @@ addTableName(0)
               <el-button type="primary" @click="fileOnClick(true, 'columns')"
                 >选择文件 (仅支持 .csv 或 .xlsx)</el-button
               >
-              <el-button @click="copySqlOnClick('columns')">复制 SQL 去数据库查询</el-button>
+              <el-button @click="copySqlOnClick(true, 'columns')">复制 SQL 去数据库查询</el-button>
               <input
                 type="file"
                 ref="sourceColumnsFile"
@@ -581,7 +853,7 @@ addTableName(0)
               />
             </div>
             <div class="block-title">
-              索引信息<template v-if="isSourceIndexesReady"
+              源数据库索引信息<template v-if="isSourceIndexesReady"
                 ><span style="color: var(--el-color-success); margin: 0 1rem"
                   >已提供</span
                 ></template
@@ -591,7 +863,7 @@ addTableName(0)
               <el-button type="primary" @click="fileOnClick(true, 'indexes')"
                 >选择文件 (仅支持 .csv 或 .xlsx)</el-button
               >
-              <el-button @click="copySqlOnClick('indexes')">复制 SQL 去数据库查询</el-button>
+              <el-button @click="copySqlOnClick(true, 'indexes')">复制 SQL 去数据库查询</el-button>
               <input
                 type="file"
                 ref="sourceIndexesFile"
@@ -602,12 +874,8 @@ addTableName(0)
             </div>
           </div>
           <div class="step2-content-right">
-            <div class="block-title">目标数据库</div>
-            <div class="block">
-              <el-input v-model="targetName"></el-input>
-            </div>
             <div class="block-title">
-              表信息
+              目标数据库表信息
               <template v-if="isTargetTablesReady"
                 ><span style="color: var(--el-color-success); margin: 0 1rem">已提供</span>
               </template>
@@ -616,7 +884,7 @@ addTableName(0)
               <el-button type="primary" @click="fileOnClick(false, 'tables')"
                 >选择文件 (仅支持 .csv 或 .xlsx)</el-button
               >
-              <el-button @click="copySqlOnClick('tables')">复制 SQL 去数据库查询</el-button>
+              <el-button @click="copySqlOnClick(false, 'tables')">复制 SQL 去数据库查询</el-button>
               <input
                 type="file"
                 ref="targetTablesFile"
@@ -626,7 +894,7 @@ addTableName(0)
               />
             </div>
             <div class="block-title">
-              字段信息
+              目标数据库字段信息
               <template v-if="isTargetColumnsReady">
                 <span style="color: var(--el-color-success); margin: 0 1rem">已提供</span></template
               >
@@ -635,7 +903,7 @@ addTableName(0)
               <el-button type="primary" @click="fileOnClick(false, 'columns')"
                 >选择文件 (仅支持 .csv 或 .xlsx)</el-button
               >
-              <el-button @click="copySqlOnClick('columns')">复制 SQL 去数据库查询</el-button>
+              <el-button @click="copySqlOnClick(false, 'columns')">复制 SQL 去数据库查询</el-button>
               <input
                 type="file"
                 ref="targetColumnsFile"
@@ -645,7 +913,7 @@ addTableName(0)
               />
             </div>
             <div class="block-title">
-              索引信息<template v-if="isTargetIndexesReady"
+              目标数据库索引信息<template v-if="isTargetIndexesReady"
                 ><span style="color: var(--el-color-success); margin: 0 1rem"
                   >已提供</span
                 ></template
@@ -655,7 +923,7 @@ addTableName(0)
               <el-button type="primary" @click="fileOnClick(false, 'indexes')"
                 >选择文件 (仅支持 .csv 或 .xlsx)</el-button
               >
-              <el-button @click="copySqlOnClick('indexes')">复制 SQL 去数据库查询</el-button>
+              <el-button @click="copySqlOnClick(false, 'indexes')">复制 SQL 去数据库查询</el-button>
               <input
                 type="file"
                 ref="targetIndexesFile"
@@ -671,7 +939,22 @@ addTableName(0)
           <el-button type="primary" class="next" @click="step2Next">下一步: 比较差异</el-button>
         </div>
       </div>
-      <div class="step-container" :class="{ active: isStepActivated('3') }"></div>
+      <div class="step-container" :class="{ active: isStepActivated('3') }">
+        <div class="step-content-container step3-content-container">
+          <div class="schema-details">
+            <div>
+              {{ sourceDatabaseName }}
+              {{ sourceDatabaseRemark !== '' ? `(${sourceDatabaseRemark})` : '' }}
+            </div>
+          </div>
+          <div class="schema-compare-result"></div>
+        </div>
+        <div class="step-nav">
+          <el-button type="primary" class="prev" @click="step3Prev"
+            >上一步: 提供数据库信息</el-button
+          >
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -788,7 +1071,7 @@ body {
 .step1-content {
   width: 50rem;
   align-self: center;
-  padding: 2rem 2rem 0 2rem;
+  padding: 3rem 2rem;
   margin: 0 auto;
 
   .table-name-area {
@@ -829,5 +1112,20 @@ body {
 .step2-content-right {
   // border: 1px solid red;
   padding: 3rem 2rem;
+}
+
+.step3-content-container {
+  display: flex;
+  flex-direction: row;
+}
+.schema-details {
+  border: 1px solid red;
+  width: 0;
+  flex-grow: 1;
+}
+.schema-compare-result {
+  border: 1px solid red;
+  width: 0;
+  flex-grow: 1;
 }
 </style>
