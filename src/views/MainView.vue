@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { Plus, Minus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import _ from 'lodash'
@@ -7,6 +7,7 @@ import copy from 'copy-text-to-clipboard'
 import XLSX from 'xlsx'
 import Ajv from 'ajv'
 import { diff } from 'deep-diff'
+import { MoreFilled, ArrowRight } from '@element-plus/icons-vue'
 
 let step = ref('3')
 let sourceDatabaseName = ref('')
@@ -34,6 +35,8 @@ let targetIndexes = ref([])
 let targetIndexesFile = ref(null)
 let sourceTablesDifferences = ref([])
 let targetTablesDifferences = ref([])
+let displayDatabase = ref('target') // source, target
+let displayTable = ref('difference') // all, difference
 
 let isStepActivated = computed(() => {
   return (s) => s === step.value
@@ -55,6 +58,29 @@ let isSourceIndexesReady = computed(() => sourceIndexes.value.length > 0)
 let isTargetTablesReady = computed(() => targetTables.value.length > 0)
 let isTargetColumnsReady = computed(() => targetColumns.value.length > 0)
 let isTargetIndexesReady = computed(() => targetIndexes.value.length > 0)
+let displayDatabaseName = computed(() => {
+  if (displayDatabase.value === 'source') {
+
+    return sourceDatabaseName.value + (sourceDatabaseRemark.value !== '' ? ` (${sourceDatabaseRemark.value})` : '')
+  } else {
+
+    return targetDatabaseName.value + (targetDatabaseRemark.value !== '' ? ` (${targetDatabaseRemark.value})` : '')
+  }
+})
+let displayTablesDifferences = computed(() => {
+  let tables
+  if (displayDatabase.value === 'source') {
+    tables = sourceTablesDifferences.value
+  } else {
+    tables = targetTablesDifferences.value
+  }
+  if (displayTable.value === 'difference') {
+    tables = _.filter(tables, n => n.tableDifferenceType !== 'NONE')
+  } 
+  return tables
+})
+// let displayAllTable = computed(() => displayTable.value === 'all')
+// let displayDifferenceTable = computed(() => displayTable.value === 'difference')
 
 // step1 begin
 
@@ -110,18 +136,18 @@ function step1Next() {
 
 function step1ToStep2() {
   step.value = '2'
-  sourceTables.value = []
-  sourceTablesFile.value.value = ''
-  sourceColumns.value = []
-  sourceColumnsFile.value.value = ''
-  sourceIndexes.value = []
-  sourceIndexesFile.value.value = ''
-  targetTables.value = []
-  targetTablesFile.value.value = ''
-  targetColumns.value = []
-  targetColumnsFile.value.value = ''
-  targetIndexes.value = []
-  targetIndexesFile.value.value = ''
+  // sourceTables.value = []
+  // sourceTablesFile.value.value = ''
+  // sourceColumns.value = []
+  // sourceColumnsFile.value.value = ''
+  // sourceIndexes.value = []
+  // sourceIndexesFile.value.value = ''
+  // targetTables.value = []
+  // targetTablesFile.value.value = ''
+  // targetColumns.value = []
+  // targetColumnsFile.value.value = ''
+  // targetIndexes.value = []
+  // targetIndexesFile.value.value = ''
 }
 
 // step1 end
@@ -814,8 +840,6 @@ function compare() {
 
   sourceTablesDifferences.value = sTablesDifferences
   targetTablesDifferences.value = tTablesDifferences
-  console.dir(sTablesDifferences)
-  console.dir(tTablesDifferences)
 }
 
 // step2 end
@@ -824,6 +848,54 @@ function compare() {
 
 function step3Prev() {
   step.value = '2'
+}
+
+function closeTable(tableName) {
+
+  let table
+  if (displayDatabase.value === 'source') {
+    table = _.find(sourceTablesDifferences.value, n => n.tableName === tableName)
+  } else {
+    table = _.find(targetTablesDifferences.value, n=> n.tableName === tableName)
+  }
+  if (table) {
+    table.tableExpanded = false
+  }
+}
+
+function expandTable(tableName) {
+  
+  let table
+  if (displayDatabase.value === 'source') {
+    table = _.find(sourceTablesDifferences.value, n => n.tableName === tableName)
+  } else {
+    table = _.find(targetTablesDifferences.value, n=> n.tableName === tableName)
+  }
+  if (table) {
+    table.tableExpanded = true
+  }
+}
+
+function closeAllTable() {
+  if (displayDatabase.value === 'source') {
+    _.forEach(sourceTablesDifferences.value, n => {
+      n.tableExpanded = false
+    })
+  } else {
+    _.forEach(targetTablesDifferences.value, n => {
+      n.tableExpanded = false
+    })
+  }
+}
+
+function moreHandleCommand(command) {
+  if (command === 'closeAllTable') {
+    closeAllTable()
+  }
+}
+
+function generateSql() {
+
 }
 
 // step3 end
@@ -836,40 +908,44 @@ function step3Prev() {
     </div>
     <div class="page-body">
       <div class="step-tabs">
-        <div class="step-tab" :class="{ active: isStepActivated('1') }">1. 选择数据库</div>
-        <div class="step-tab-split">></div>
-        <div class="step-tab" :class="{ active: isStepActivated('2') }">2. 提供数据库信息</div>
-        <div class="step-tab-split">></div>
-        <div class="step-tab" :class="{ active: isStepActivated('3') }">3. 比较差异</div>
+        <div class="step-tab" :class="{ active: isStepActivated('1') }">① 选择数据库</div>
+        <div class="step-tab-split"><el-icon><ArrowRight/></el-icon></div>
+        <div class="step-tab" :class="{ active: isStepActivated('2') }">② 提供数据库信息</div>
+        <div class="step-tab-split"><el-icon><ArrowRight/></el-icon></div>
+        <div class="step-tab" :class="{ active: isStepActivated('3') }">③ 比较差异</div>
       </div>
       <div class="step-container" :class="{ active: isStepActivated('1') }">
-        <div class="step-content-container">
+        <div class="step-content-container step1-content-container">
           <div class="step1-content">
             <div class="block-title">源数据库</div>
             <div class="block">
+              <div class="database-name-area">
               <el-input v-model="sourceDatabaseName" :clearable="true" placeholder="输入数据库名">
                 <template #prepend>名称</template>
               </el-input>
               <el-input
                 v-model="sourceDatabaseRemark"
                 :clearable="true"
-                placeholder="输入备注以便在差异展示时更容易区别数据库"
+                placeholder="数据库名相同时使用备注区分数据库"
               >
                 <template #prepend>备注</template>
               </el-input>
             </div>
+            </div>
             <div class="block-title">目标数据库</div>
             <div class="block">
+              <div class="database-name-area">
               <el-input v-model="targetDatabaseName" :clearable="true" placeholder="输入数据库名">
                 <template #prepend>名称</template>
               </el-input>
               <el-input
                 v-model="targetDatabaseRemark"
                 :clearable="true"
-                placeholder="输入备注以便在差异展示时更容易区别数据库"
+                placeholder="数据库名相同时使用备注区分数据库"
               >
                 <template #prepend>备注</template>
               </el-input>
+            </div>
             </div>
             <div class="block-title">表</div>
             <div class="block">
@@ -908,7 +984,7 @@ function step3Prev() {
             </div>
             <div class="block">
               <el-button type="primary" @click="fileOnClick(true, 'tables')"
-                >选择文件 (仅支持 .csv 或 .xlsx)</el-button
+                >选择文件 (支持 .csv .xlsx)</el-button
               >
               <el-button @click="copySqlOnClick(true, 'tables')">复制 SQL 去数据库查询</el-button>
               <input
@@ -928,7 +1004,7 @@ function step3Prev() {
             </div>
             <div class="block">
               <el-button type="primary" @click="fileOnClick(true, 'columns')"
-                >选择文件 (仅支持 .csv 或 .xlsx)</el-button
+                >选择文件 (支持 .csv .xlsx)</el-button
               >
               <el-button @click="copySqlOnClick(true, 'columns')">复制 SQL 去数据库查询</el-button>
               <input
@@ -948,7 +1024,7 @@ function step3Prev() {
             </div>
             <div class="block">
               <el-button type="primary" @click="fileOnClick(true, 'indexes')"
-                >选择文件 (仅支持 .csv 或 .xlsx)</el-button
+                >选择文件 (支持 .csv .xlsx)</el-button
               >
               <el-button @click="copySqlOnClick(true, 'indexes')">复制 SQL 去数据库查询</el-button>
               <input
@@ -969,7 +1045,7 @@ function step3Prev() {
             </div>
             <div class="block">
               <el-button type="primary" @click="fileOnClick(false, 'tables')"
-                >选择文件 (仅支持 .csv 或 .xlsx)</el-button
+                >选择文件 (支持 .csv .xlsx)</el-button
               >
               <el-button @click="copySqlOnClick(false, 'tables')">复制 SQL 去数据库查询</el-button>
               <input
@@ -988,7 +1064,7 @@ function step3Prev() {
             </div>
             <div class="block">
               <el-button type="primary" @click="fileOnClick(false, 'columns')"
-                >选择文件 (仅支持 .csv 或 .xlsx)</el-button
+                >选择文件 (支持 .csv .xlsx)</el-button
               >
               <el-button @click="copySqlOnClick(false, 'columns')">复制 SQL 去数据库查询</el-button>
               <input
@@ -1008,7 +1084,7 @@ function step3Prev() {
             </div>
             <div class="block">
               <el-button type="primary" @click="fileOnClick(false, 'indexes')"
-                >选择文件 (仅支持 .csv 或 .xlsx)</el-button
+                >选择文件 (支持 .csv .xlsx)</el-button
               >
               <el-button @click="copySqlOnClick(false, 'indexes')">复制 SQL 去数据库查询</el-button>
               <input
@@ -1026,15 +1102,53 @@ function step3Prev() {
           <el-button type="primary" class="next" @click="step2Next">下一步: 比较差异</el-button>
         </div>
       </div>
+      
       <div class="step-container" :class="{ active: isStepActivated('3') }">
+        <!-- <div class="cr-controls2">
+            <el-button type="primary" size="small">收起所有表</el-button>
+          
+          </div> -->
+          <!-- <div class="cr-more">
+            <el-button :icon="MoreFilled" size="small" circle />
+          </div> -->
         <div class="step-content-container step3-content-container">
-          <div class="schema-details">
-            <div>
-              {{ sourceDatabaseName }}
-              {{ sourceDatabaseRemark !== '' ? `(${sourceDatabaseRemark})` : '' }}
+          <div class="cr-header">
+            <div class="cr-database-name">
+              {{ displayDatabaseName }}
             </div>
-            <div class="cr-table" v-for="table in sourceTablesDifferences" :key="table.tableName">
+            <div class="cr-controls">
+  <el-radio-group v-model="displayDatabase" size="small">
+      <el-radio-button label="源数据库" value="source" />
+      <el-radio-button label="目标数据库" value="target" />
+    </el-radio-group>
+    <el-radio-group v-model="displayTable" size="small">
+      <el-radio-button label="全部表" value="all" />
+      <el-radio-button label="有差异的表" value="difference" />
+    </el-radio-group>
+    <el-dropdown trigger="click" @command="moreHandleCommand">
+      <el-button :icon="MoreFilled" size="small" circle />
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="closeAllTable">折叠全部表</el-dropdown-item>
+          </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+    
+  </div>
+          </div>
+          
+          <div class="cr-tables">
+            
+            <div class="cr-table" v-for="table in displayTablesDifferences" :key="table.tableName">
               <div class="cr-table-header">
+                <div class="table-open-close">
+                  <el-icon v-if="!table.tableExpanded" @click="expandTable(table.tableName)">
+                    <Plus/>
+                  </el-icon>
+                  <el-icon v-if="table.tableExpanded" @click="closeTable(table.tableName)">
+                    <Minus/>
+                  </el-icon>
+                </div>
                 <div class="difference-types">
                   <div class="difference-type a" v-if="table.tableDifferenceType === 'ADD'">
                     新增
@@ -1049,7 +1163,7 @@ function step3Prev() {
                 </div>
                 <div>{{ table.tableName }}</div>
               </div>
-              <div class="cr-table-body">
+              <div class="cr-table-body" v-show="table.tableExpanded">
                 <div class="cr-table-comment-header">
                   <div class="difference-types" v-if="table.tableDifferenceType === 'UPDATE'">
                     <div
@@ -1211,11 +1325,14 @@ function step3Prev() {
               </div>
             </div>
           </div>
-          <div class="schema-compare-result"></div>
+          
         </div>
         <div class="step-nav">
           <el-button type="primary" class="prev" @click="step3Prev"
             >上一步: 提供数据库信息</el-button
+          >
+          <el-button type="primary" class="next" @click="generateSql"
+            >生成 SQL</el-button
           >
         </div>
       </div>
@@ -1294,13 +1411,25 @@ body {
     }
   }
 }
+.database-name-area {
+  display: flex;
+  flex-direction: row;
+
+  .el-input:first-of-type {
+    margin-right: 1.2rem;
+  }
+}
 
 .step-container {
   display: none;
   flex-direction: column;
   height: 0;
   flex-grow: 1;
-  overflow: auto;
+  align-items: center;
+  width: 84rem;
+  justify-self: center;
+  position: relative;
+  margin: auto;
 
   &.active {
     display: flex;
@@ -1308,20 +1437,31 @@ body {
 }
 
 .step-content-container {
-  height: 0;
-  flex-grow: 1;
-  // border: 1px solid red;
-  overflow: auto;
+  // flex-grow: 1;
+  // padding: 3rem 2rem;
+  box-sizing: border-box;
+  width: 84rem;
+  box-shadow: 0px 0px 12px rgba(0, 0, 0, .12);
+  border-radius: 4px;
+  border: 1px solid var(--el-border-color-light);
+  // overflow: auto;
+  margin: 2rem 0 3rem 0;
+  // height: 0;
+  // flex-grow: 1;
 }
 
 .step-nav {
-  width: 50rem;
+  width: 84rem;
   display: flex;
-  height: 6rem;
+  // height: 6rem;
+  // min-height: 6rem;
   flex-direction: row;
   align-self: center;
   align-items: center;
-  // border: 1px solid red;
+  position: sticky;
+  bottom: 0;
+  background-color: white;
+  margin-bottom: 2rem;
 
   .next {
     margin-left: auto;
@@ -1332,10 +1472,13 @@ body {
   }
 }
 
-.step1-content {
-  width: 50rem;
-  align-self: center;
+.step1-content-container {
   padding: 3rem 2rem;
+  overflow: auto;
+}
+
+.step1-content {
+  align-self: center;
   margin: 0 auto;
 
   .table-name-area {
@@ -1364,45 +1507,48 @@ body {
 .step2-content-container {
   display: flex;
   flex-direction: row;
-  justify-content: center;
-  gap: 2rem;
+  justify-content: space-between;
+  padding: 3rem 2rem;
+  // width: 80rem;
 }
 
 .step2-content-left {
   // border: 1px solid red;
-  padding: 3rem 2rem;
+  // padding: 3rem 2rem;
 }
 
 .step2-content-right {
   // border: 1px solid red;
-  padding: 3rem 2rem;
+  // padding: 3rem 2rem;
 }
 
 .step3-content-container {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.cr-header {
+  border-bottom: 1px solid var(--el-border-color-light);
+  height: 4rem;
+  min-height: 4rem;
+  padding: 0 1rem;
   display: flex;
   flex-direction: row;
+  align-items: center;
+  justify-content: space-between ;
+  position: relative;
 }
-.schema-details {
-  border: 1px solid red;
-  width: 0;
-  flex-grow: 1;
-
-  .green {
-    color: #19be6b;
-  }
-
-  .yellow {
-    color: #ff9900;
-  }
-
-  .red {
-    color: #ed4014;
-  }
+.cr-database-name {
+  font-weight: bold;
+  font-size: 1.6rem;
 }
-.schema-compare-result {
-  border: 1px solid red;
-  width: 0;
-  flex-grow: 1;
+
+
+.cr-tables {
+  overflow: auto;
+  padding: 0 1rem;
+  position: relative;
 }
 
 .cr-table-header {
@@ -1423,16 +1569,16 @@ body {
 .cr-table-comment-header,
 .cr-columns-header,
 .cr-indexes-header {
-  padding-left: 2rem;
+  padding-left: 4rem;
   font-weight: bold;
 }
 .cr-column-header,
 .cr-index-header {
-  padding-left: 4rem;
+  padding-left: 6rem;
 }
 
 .cr-table-comment-body {
-  padding-left: 4rem;
+  padding-left: 6rem;
 }
 
 .difference-types {
@@ -1463,4 +1609,53 @@ body {
     background-color: #909399;
   }
 }
+
+.cr-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.cr-controls2 {
+  position: absolute;
+  right: 84rem;
+  top: 5rem;
+  
+  display: flex;
+  flex-direction: column;
+  align-items:flex-end;
+  gap: 1rem;
+}
+
+.cr-more {
+  position: absolute;
+  top: 6rem;
+  right: 1rem;
+
+  z-index: 2000;
+  
+
+  .el-button {
+    color: var(--el-button-border-color);
+
+    &:hover {
+      color: var(--el-color-primary)
+    };
+  }
+}
+
+.table-open-close {
+  display: flex;
+    align-items: center;
+
+    .el-icon {
+      cursor: pointer;
+      margin-right: .6rem;
+
+      &:hover {
+        color: var(--el-color-primary);
+      }
+    }
+}
+
 </style>
