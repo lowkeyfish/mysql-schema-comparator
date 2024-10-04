@@ -61,11 +61,15 @@ let isTargetColumnsReady = computed(() => targetColumns.value.length > 0)
 let isTargetIndexesReady = computed(() => targetIndexes.value.length > 0)
 let displayDatabaseName = computed(() => {
   if (displayDatabase.value === 'source') {
-
-    return sourceDatabaseName.value + (sourceDatabaseRemark.value !== '' ? ` (${sourceDatabaseRemark.value})` : '')
+    return (
+      sourceDatabaseName.value +
+      (sourceDatabaseRemark.value !== '' ? ` (${sourceDatabaseRemark.value})` : '')
+    )
   } else {
-
-    return targetDatabaseName.value + (targetDatabaseRemark.value !== '' ? ` (${targetDatabaseRemark.value})` : '')
+    return (
+      targetDatabaseName.value +
+      (targetDatabaseRemark.value !== '' ? ` (${targetDatabaseRemark.value})` : '')
+    )
   }
 })
 let displayTablesDifferences = computed(() => {
@@ -76,8 +80,8 @@ let displayTablesDifferences = computed(() => {
     tables = targetTablesDifferences.value
   }
   if (displayTable.value === 'difference') {
-    tables = _.filter(tables, n => n.tableDifferenceType !== 'NONE')
-  } 
+    tables = _.filter(tables, (n) => n.tableDifferenceType !== 'NONE')
+  }
   return tables
 })
 // let displayAllTable = computed(() => displayTable.value === 'all')
@@ -852,12 +856,11 @@ function step3Prev() {
 }
 
 function closeTable(tableName) {
-
   let table
   if (displayDatabase.value === 'source') {
-    table = _.find(sourceTablesDifferences.value, n => n.tableName === tableName)
+    table = _.find(sourceTablesDifferences.value, (n) => n.tableName === tableName)
   } else {
-    table = _.find(targetTablesDifferences.value, n=> n.tableName === tableName)
+    table = _.find(targetTablesDifferences.value, (n) => n.tableName === tableName)
   }
   if (table) {
     table.tableExpanded = false
@@ -865,12 +868,11 @@ function closeTable(tableName) {
 }
 
 function expandTable(tableName) {
-  
   let table
   if (displayDatabase.value === 'source') {
-    table = _.find(sourceTablesDifferences.value, n => n.tableName === tableName)
+    table = _.find(sourceTablesDifferences.value, (n) => n.tableName === tableName)
   } else {
-    table = _.find(targetTablesDifferences.value, n=> n.tableName === tableName)
+    table = _.find(targetTablesDifferences.value, (n) => n.tableName === tableName)
   }
   if (table) {
     table.tableExpanded = true
@@ -879,11 +881,11 @@ function expandTable(tableName) {
 
 function closeAllTable() {
   if (displayDatabase.value === 'source') {
-    _.forEach(sourceTablesDifferences.value, n => {
+    _.forEach(sourceTablesDifferences.value, (n) => {
       n.tableExpanded = false
     })
   } else {
-    _.forEach(targetTablesDifferences.value, n => {
+    _.forEach(targetTablesDifferences.value, (n) => {
       n.tableExpanded = false
     })
   }
@@ -895,9 +897,7 @@ function moreHandleCommand(command) {
   }
 }
 
-function generateSql() {
-
-}
+function generateSql() {}
 
 // step3 end
 </script>
@@ -910,9 +910,13 @@ function generateSql() {
     <div class="page-body">
       <div class="step-tabs">
         <div class="step-tab" :class="{ active: isStepActivated('1') }">① 选择数据库</div>
-        <div class="step-tab-split"><el-icon><ArrowRight/></el-icon></div>
+        <div class="step-tab-split">
+          <el-icon><ArrowRight /></el-icon>
+        </div>
         <div class="step-tab" :class="{ active: isStepActivated('2') }">② 提供数据库信息</div>
-        <div class="step-tab-split"><el-icon><ArrowRight/></el-icon></div>
+        <div class="step-tab-split">
+          <el-icon><ArrowRight /></el-icon>
+        </div>
         <div class="step-tab" :class="{ active: isStepActivated('3') }">③ 比较差异</div>
       </div>
       <div class="step-container" :class="{ active: isStepActivated('1') }">
@@ -921,32 +925,32 @@ function generateSql() {
             <div class="block-title">源数据库</div>
             <div class="block">
               <div class="database-name-area">
-              <el-input v-model="sourceDatabaseName" :clearable="true" placeholder="输入数据库名">
-                <template #prepend>名称</template>
-              </el-input>
-              <el-input
-                v-model="sourceDatabaseRemark"
-                :clearable="true"
-                placeholder="数据库名相同时使用备注区分数据库"
-              >
-                <template #prepend>备注</template>
-              </el-input>
-            </div>
+                <el-input v-model="sourceDatabaseName" :clearable="true" placeholder="输入数据库名">
+                  <template #prepend>名称</template>
+                </el-input>
+                <el-input
+                  v-model="sourceDatabaseRemark"
+                  :clearable="true"
+                  placeholder="数据库名相同时使用备注区分数据库"
+                >
+                  <template #prepend>备注</template>
+                </el-input>
+              </div>
             </div>
             <div class="block-title">目标数据库</div>
             <div class="block">
               <div class="database-name-area">
-              <el-input v-model="targetDatabaseName" :clearable="true" placeholder="输入数据库名">
-                <template #prepend>名称</template>
-              </el-input>
-              <el-input
-                v-model="targetDatabaseRemark"
-                :clearable="true"
-                placeholder="数据库名相同时使用备注区分数据库"
-              >
-                <template #prepend>备注</template>
-              </el-input>
-            </div>
+                <el-input v-model="targetDatabaseName" :clearable="true" placeholder="输入数据库名">
+                  <template #prepend>名称</template>
+                </el-input>
+                <el-input
+                  v-model="targetDatabaseRemark"
+                  :clearable="true"
+                  placeholder="数据库名相同时使用备注区分数据库"
+                >
+                  <template #prepend>备注</template>
+                </el-input>
+              </div>
             </div>
             <div class="block-title">表</div>
             <div class="block">
@@ -1103,13 +1107,13 @@ function generateSql() {
           <el-button type="primary" class="next" @click="step2Next">下一步: 比较差异</el-button>
         </div>
       </div>
-      
+
       <div class="step-container" :class="{ active: isStepActivated('3') }">
         <!-- <div class="cr-controls2">
             <el-button type="primary" size="small">收起所有表</el-button>
           
           </div> -->
-          <!-- <div class="cr-more">
+        <!-- <div class="cr-more">
             <el-button :icon="MoreFilled" size="small" circle />
           </div> -->
         <div class="step-content-container step3-content-container">
@@ -1118,36 +1122,34 @@ function generateSql() {
               {{ displayDatabaseName }}
             </div>
             <div class="cr-controls">
-  <el-radio-group v-model="displayDatabase" size="small">
-      <el-radio-button label="源数据库" value="source" />
-      <el-radio-button label="目标数据库" value="target" />
-    </el-radio-group>
-    <el-radio-group v-model="displayTable" size="small">
-      <el-radio-button label="全部表" value="all" />
-      <el-radio-button label="有差异的表" value="difference" />
-    </el-radio-group>
-    <el-dropdown trigger="click" @command="moreHandleCommand">
-      <el-button :icon="MoreFilled" size="small" circle />
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item command="closeAllTable">折叠全部表</el-dropdown-item>
-          </el-dropdown-menu>
-      </template>
-    </el-dropdown>
-    
-  </div>
+              <el-radio-group v-model="displayDatabase" size="small">
+                <el-radio-button label="源数据库" value="source" />
+                <el-radio-button label="目标数据库" value="target" />
+              </el-radio-group>
+              <el-radio-group v-model="displayTable" size="small">
+                <el-radio-button label="全部表" value="all" />
+                <el-radio-button label="有差异的表" value="difference" />
+              </el-radio-group>
+              <el-dropdown trigger="click" @command="moreHandleCommand">
+                <el-button :icon="MoreFilled" size="small" circle />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="closeAllTable">折叠全部表</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </div>
-          
+
           <div class="cr-tables">
-            
             <div class="cr-table" v-for="table in displayTablesDifferences" :key="table.tableName">
               <div class="cr-table-header">
                 <div class="table-open-close">
                   <el-icon v-if="!table.tableExpanded" @click="expandTable(table.tableName)">
-                    <Plus/>
+                    <Plus />
                   </el-icon>
                   <el-icon v-if="table.tableExpanded" @click="closeTable(table.tableName)">
-                    <Minus/>
+                    <Minus />
                   </el-icon>
                 </div>
                 <div class="difference-types">
@@ -1326,16 +1328,12 @@ function generateSql() {
               </div>
             </div>
           </div>
-          
-
         </div>
         <div class="step-nav">
           <el-button type="primary" class="prev" @click="step3Prev"
             >上一步: 提供数据库信息</el-button
           >
-          <el-button type="primary" class="next" @click="generateSql"
-            >生成 SQL</el-button
-          >
+          <el-button type="primary" class="next" @click="generateSql">生成 SQL</el-button>
         </div>
       </div>
     </div>
@@ -1443,7 +1441,7 @@ body {
   // padding: 3rem 2rem;
   box-sizing: border-box;
   width: 84rem;
-  box-shadow: 0px 0px 12px rgba(0, 0, 0, .12);
+  box-shadow: 0px 0px 12px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
   border: 1px solid var(--el-border-color-light);
   // overflow: auto;
@@ -1538,14 +1536,13 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between ;
+  justify-content: space-between;
   position: relative;
 }
 .cr-database-name {
   font-weight: bold;
   font-size: 1.6rem;
 }
-
 
 .cr-tables {
   overflow: auto;
@@ -1622,10 +1619,10 @@ body {
   position: absolute;
   right: 84rem;
   top: 5rem;
-  
+
   display: flex;
   flex-direction: column;
-  align-items:flex-end;
+  align-items: flex-end;
   gap: 1rem;
 }
 
@@ -1635,29 +1632,27 @@ body {
   right: 1rem;
 
   z-index: 2000;
-  
 
   .el-button {
     color: var(--el-button-border-color);
 
     &:hover {
-      color: var(--el-color-primary)
-    };
+      color: var(--el-color-primary);
+    }
   }
 }
 
 .table-open-close {
   display: flex;
-    align-items: center;
+  align-items: center;
 
-    .el-icon {
-      cursor: pointer;
-      margin-right: .6rem;
+  .el-icon {
+    cursor: pointer;
+    margin-right: 0.6rem;
 
-      &:hover {
-        color: var(--el-color-primary);
-      }
+    &:hover {
+      color: var(--el-color-primary);
     }
+  }
 }
-
 </style>
