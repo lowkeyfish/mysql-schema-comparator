@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Plus, Minus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import _ from 'lodash'
@@ -41,6 +41,7 @@ let displayTable = ref('difference') // all, difference
 let isStepActivated = computed(() => {
   return (s) => s === step.value
 })
+
 let isAllTable = computed(() => tableNameType.value === '全部表')
 let isIncludeTable = computed(() => tableNameType.value === '仅指定使用的表')
 let isExcludeTable = computed(() => tableNameType.value === '仅指定排除的表')
@@ -1326,6 +1327,7 @@ function generateSql() {
             </div>
           </div>
           
+
         </div>
         <div class="step-nav">
           <el-button type="primary" class="prev" @click="step3Prev"
