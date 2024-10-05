@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 import _ from 'lodash'
 import copy from 'copy-text-to-clipboard'
 import XLSX from 'xlsx'
-import Ajv from 'ajv'
 import { diff } from 'deep-diff'
 import { MoreFilled, ArrowRight } from '@element-plus/icons-vue'
 
@@ -200,7 +199,8 @@ function copySqlOnClick(isSource, type) {
     \`TABLE_SCHEMA\` AS tableSchema,
     \`TABLE_NAME\` AS tableName,
     \`TABLE_TYPE\` AS tableType,
-    IFNULL(\`TABLE_COMMENT\`, '') AS tableComment
+    IFNULL(\`TABLE_COMMENT\`, '') AS tableComment,
+    IF(\`TABLE_COMMENT\` IS NOT NULL, 'YES', 'NO') AS hasTableComment
     FROM INFORMATION_SCHEMA.TABLES
     WHERE TABLE_SCHEMA = '${database}' ${whereSql} LIMIT 10000
     `
@@ -226,7 +226,8 @@ function copySqlOnClick(isSource, type) {
     IFNULL(\`COLLATION_NAME\`, '') AS collationName,
     \`COLUMN_TYPE\` AS columnType,
     \`EXTRA\` AS extra,
-    IFNULL(\`COLUMN_COMMENT\`, '') AS columnComment
+    IFNULL(\`COLUMN_COMMENT\`, '') AS columnComment,
+    IF(\`COLUMN_COMMENT\` IS NOT NULL, 'YES', 'NO') AS hasColumnComment
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = '${database}' ${whereSql} LIMIT 10000
     `
@@ -266,8 +267,9 @@ function readCsvOrElsxFileToJson(file, jsonHandler) {
       let workbook = XLSX.read(data, { type: 'string' })
       let firstSheetName = workbook.SheetNames[0]
       let worksheet = workbook.Sheets[firstSheetName]
+      let keys = XLSX.utils.sheet_to_json(worksheet, { raw: false, header: 1 })[0]
       let json = XLSX.utils.sheet_to_json(worksheet, { raw: false })
-      jsonHandler(json)
+      jsonHandler(keys, json)
     }
     reader.readAsText(file)
   } else if (fileExtension === 'xlsx') {
@@ -277,8 +279,9 @@ function readCsvOrElsxFileToJson(file, jsonHandler) {
       let workbook = XLSX.read(data, { type: 'array' })
       let firstSheetName = workbook.SheetNames[0]
       let worksheet = workbook.Sheets[firstSheetName]
+      let keys = XLSX.utils.sheet_to_json(worksheet, { raw: false, header: 1 })[0]
       let json = XLSX.utils.sheet_to_json(worksheet, { raw: false })
-      jsonHandler(json)
+      jsonHandler(keys, json)
     }
     reader.readAsArrayBuffer(file)
   } else {
@@ -290,83 +293,50 @@ function readCsvOrElsxFileToJson(file, jsonHandler) {
   }
 }
 
-function validateTablesSchema(tables) {
-  let schema = {
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        tableSchema: {},
-        tableName: {},
-        tableType: {},
-        tableComment: {}
-      },
-      additionalProperties: false
-    }
-  }
-
-  let ajv = new Ajv()
-  let valid = ajv.validate(schema, tables)
-  return valid
+function validateTablesSchema(keys) {
+  let requiredKeys = ['tableSchema', 'tableName', 'tableType', 'tableComment', 'hasTableComment']
+  return requiredKeys.length === keys.length && _.without(keys, ...requiredKeys).length === 0
 }
 
-function validateColumnsSchema(columns) {
-  let schema = {
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        tableSchema: {},
-        tableName: {},
-        columnName: {},
-        ordinalPosition: {},
-        columnDefault: {},
-        hasDefault: {},
-        isNullable: {},
-        dataType: {},
-        characterMaximumLength: {},
-        hasCharacterMaximumLength: {},
-        numericPercision: {},
-        hasNumericPercision: {},
-        numericScale: {},
-        hasNumericScale: {},
-        characterSetName: {},
-        collationName: {},
-        columnType: {},
-        extra: {},
-        columnComment: {}
-      },
-      additionalProperties: false
-    }
-  }
-
-  let ajv = new Ajv()
-  let valid = ajv.validate(schema, columns)
-  return valid
+function validateColumnsSchema(keys) {
+  let requiredKeys = [
+    'tableSchema',
+    'tableName',
+    'columnName',
+    'ordinalPosition',
+    'columnDefault',
+    'hasDefault',
+    'isNullable',
+    'dataType',
+    'characterMaximumLength',
+    'hasCharacterMaximumLength',
+    'numericPercision',
+    'hasNumericPercision',
+    'numericScale',
+    'hasNumericScale',
+    'characterSetName',
+    'collationName',
+    'columnType',
+    'extra',
+    'columnComment',
+    'hasColumnComment'
+  ]
+  return requiredKeys.length === keys.length && _.without(keys, ...requiredKeys).length === 0
 }
 
-function validateIndexesSchema(indexes) {
-  let schema = {
-    type: 'array',
-    items: {
-      type: 'object',
-      properties: {
-        tableSchema: {},
-        tableName: {},
-        nonUnique: {},
-        indexName: {},
-        seqInIndex: {},
-        columnName: {},
-        collation: {},
-        indexType: {}
-      },
-      additionalProperties: false
-    }
-  }
+function validateIndexesSchema(keys) {
+  let requiredKeys = [
+    'tableSchema',
+    'tableName',
+    'nonUnique',
+    'indexName',
+    'seqInIndex',
+    'columnName',
+    'collation',
+    'indexType'
+  ]
 
-  let ajv = new Ajv()
-  let valid = ajv.validate(schema, indexes)
-  return valid
+  return requiredKeys.length === keys.length && _.without(keys, ...requiredKeys).length === 0
 }
 
 function fileOnChange(isSource, type) {
@@ -418,11 +388,11 @@ function fileOnChange(isSource, type) {
     return
   }
 
-  readCsvOrElsxFileToJson(file, (json) => {
+  readCsvOrElsxFileToJson(file, (keys, json) => {
     let schemaValid
     let message
     if (type === 'tables') {
-      schemaValid = validateTablesSchema(json)
+      schemaValid = validateTablesSchema(keys)
       if (schemaValid) {
         if (isSource) {
           sourceTables.value = json
@@ -432,7 +402,7 @@ function fileOnChange(isSource, type) {
       }
       message = '表信息文件数据结构无效'
     } else if (type === 'columns') {
-      schemaValid = validateColumnsSchema(json)
+      schemaValid = validateColumnsSchema(keys)
       if (schemaValid) {
         if (isSource) {
           sourceColumns.value = json
@@ -442,7 +412,7 @@ function fileOnChange(isSource, type) {
       }
       message = '字段信息文件数据结构无效'
     } else if (type === 'indexes') {
-      schemaValid = validateIndexesSchema(json)
+      schemaValid = validateIndexesSchema(keys)
       if (schemaValid) {
         if (isSource) {
           sourceIndexes.value = json
@@ -549,7 +519,7 @@ function tables(originalTables, originalColumns, originalIndexes) {
             collationName: c.collationName === undefined ? '' : c.collationName,
             extra: c.extra === undefined ? '' : c.extra,
             columnComment: c.columnComment === undefined ? '' : c.columnComment,
-            hasColumnCommend: (c.columnComment === undefined ? '' : c.columnComment) !== ''
+            hasColumnComment: c.hasColumnComment === 'YES'
           }
         }
       )
@@ -579,7 +549,7 @@ function tables(originalTables, originalColumns, originalIndexes) {
       return {
         tableName: t.tableName,
         tableComment: t.tableComment === undefined ? '' : t.tableComment,
-        hasTableComment: (t.tableComment === undefined ? '' : t.tableComment) !== '',
+        hasTableComment: t.hasTableComment === 'YES',
         columns,
         indexes
       }
@@ -601,24 +571,37 @@ function compare() {
     let sTable = _.find(sTables, (n) => n.tableName === tn)
     let tTable = _.find(tTables, (n) => n.tableName === tn)
 
-    let sTableDifference = { tableExpanded: true, columnsExpanded: true, indexesExpanded: true }
-    let tTableDifference = { tableExpanded: true, columnsExpanded: true, indexesExpanded: true }
+    let sTableDifference = {
+      tableExpanded: true,
+      columnsExpanded: true,
+      indexesExpanded: true,
+      tableExcluded: false,
+      tableCommentExcluded: false
+    }
+    let tTableDifference = {
+      tableExpanded: true,
+      columnsExpanded: true,
+      indexesExpanded: true,
+      tableExcluded: false,
+      tableCommentExcluded: false
+    }
     if (!sTable && tTable) {
-      sTableDifference = _.cloneDeep(tTable)
+      sTableDifference = { ...sTableDifference, ..._.cloneDeep(tTable) }
       sTableDifference.tableDifferenceType = 'ADD'
 
-      tTableDifference = tTable
+      tTableDifference = { ...tTableDifference, ...tTable }
       tTableDifference.tableDifferenceType = 'DELETE'
     } else if (sTable && !tTable) {
-      sTableDifference = sTable
+      sTableDifference = { ...sTableDifference, ...sTable }
       sTableDifference.tableDifferenceType = 'DELETE'
 
-      tTableDifference = _.cloneDeep(sTable)
+      tTableDifference = { ...tTableDifference, ..._.cloneDeep(sTable) }
       tTableDifference.tableDifferenceType = 'ADD'
     } else {
       sTableDifference = {
         tableName: sTable.tableName,
         tableComment: sTable.tableComment,
+        hasTableComment: sTable.hasTableComment,
         columns: [],
         indexes: [],
         tableDifferenceType: 'NONE',
@@ -627,11 +610,14 @@ function compare() {
         indexesDifferenceTypes: [],
         tableExpanded: true,
         columnsExpanded: true,
-        indexesExpanded: true
+        indexesExpanded: true,
+        tableExcluded: false,
+        tableCommentExcluded: false
       }
       tTableDifference = {
         tableName: tTable.tableName,
         tableComment: tTable.tableComment,
+        hasTableComment: tTable.hasTableComment,
         columns: [],
         indexes: [],
         tableDifferenceType: 'NONE',
@@ -640,19 +626,25 @@ function compare() {
         indexesDifferenceTypes: [],
         tableExpanded: true,
         columnsExpanded: true,
-        indexesExpanded: true
+        indexesExpanded: true,
+        tableExcluded: false,
+        tableCommentExcluded: false
       }
 
       if (sTableDifference.hasTableComment && !tTableDifference.hasTableComment) {
         sTableDifference.tableDifferenceType = 'UPDATE'
         sTableDifference.tableCommentDifferenceType = 'DELETE'
+
         tTableDifference.tableDifferenceType = 'UPDATE'
         tTableDifference.tableCommentDifferenceType = 'ADD'
         tTableDifference.tableComment = sTableDifference.tableComment
+        tTableDifference.hasTableComment = true
       } else if (!sTableDifference.hasTableComment && tTableDifference.hasTableComment) {
         sTableDifference.tableDifferenceType = 'UPDATE'
         sTableDifference.tableCommentDifferenceType = 'ADD'
         sTableDifference.tableComment = tTableDifference.tableComment
+        sTableDifference.hasTableComment = true
+
         tTableDifference.tableDifferenceType = 'UPDATE'
         tTableDifference.tableCommentDifferenceType = 'DELETE'
       } else if (
@@ -663,6 +655,7 @@ function compare() {
         sTableDifference.tableDifferenceType = 'UPDATE'
         sTableDifference.tableCommentDifferenceType = 'UPDATE'
         sTableDifference.tableCommentUpdate = tTableDifference.tableComment
+
         tTableDifference.tableDifferenceType = 'UPDATE'
         tTableDifference.tableCommentDifferenceType = 'UPDATE'
         tTableDifference.tableCommentUpdate = sTableDifference.tableComment
@@ -677,13 +670,15 @@ function compare() {
         if (!sColumn && tColumn) {
           sTableDifference.columns.push({
             ...tColumn,
-            columnDifferenceType: 'ADD'
+            columnDifferenceType: 'ADD',
+            columnExcluded: false
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.columns.push({
             ...tColumn,
-            columnDifferenceType: 'DELETE'
+            columnDifferenceType: 'DELETE',
+            columnExcluded: false
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -693,13 +688,15 @@ function compare() {
         if (sColumn && !tColumn) {
           sTableDifference.columns.push({
             ...sColumn,
-            columnDifferenceType: 'DELETE'
+            columnDifferenceType: 'DELETE',
+            columnExcluded: false
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.columns.push({
             ...sColumn,
-            columnDifferenceType: 'ADD'
+            columnDifferenceType: 'ADD',
+            columnExcluded: false
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -708,11 +705,13 @@ function compare() {
 
         let sc = {
           ...sColumn,
-          columnDifferenceType: 'NONE'
+          columnDifferenceType: 'NONE',
+          columnExcluded: false
         }
         let tc = {
           ...tColumn,
-          columnDifferenceType: 'NONE'
+          columnDifferenceType: 'NONE',
+          columnExcluded: false
         }
 
         let isDifferentColumn =
@@ -723,11 +722,15 @@ function compare() {
           sColumn.isNullable !== tColumn.isNullable ||
           sColumn.columnType !== tColumn.columnType ||
           sColumn.extra !== tColumn.extra ||
-          sColumn.columnComment !== tColumn.columnComment
+          sColumn.hasColumnComment !== tColumn.hasColumnComment ||
+          (sColumn.hasColumnComment &&
+            tColumn.hasColumnComment &&
+            sColumn.columnComment !== tColumn.columnComment)
         if (isDifferentColumn) {
           sc.columnDifferenceType = 'UPDATE'
           sc.update = _.cloneDeep(tColumn)
           sTableDifference.tableDifferenceType = 'UPDATE'
+
           tc.columnDifferenceType = 'UPDATE'
           tc.update = _.cloneDeep(sColumn)
           tTableDifference.tableDifferenceType = 'UPDATE'
@@ -766,13 +769,15 @@ function compare() {
         if (!sIndex && tIndex) {
           sTableDifference.indexes.push({
             ...tIndex,
-            indexDifferenceType: 'ADD'
+            indexDifferenceType: 'ADD',
+            indexExcluded: false
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.indexes.push({
             ...tIndex,
-            indexDifferenceType: 'DELETE'
+            indexDifferenceType: 'DELETE',
+            indexExcluded: false
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -782,13 +787,15 @@ function compare() {
         if (sIndex && !tIndex) {
           sTableDifference.indexes.push({
             ...sIndex,
-            indexDifferenceType: 'DELETE'
+            indexDifferenceType: 'DELETE',
+            indexExcluded: false
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.indexes.push({
             ...sIndex,
-            indexDifferenceType: 'ADD'
+            indexDifferenceType: 'ADD',
+            indexExcluded: false
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -797,11 +804,13 @@ function compare() {
 
         let si = {
           ...sIndex,
-          indexDifferenceType: 'NONE'
+          indexDifferenceType: 'NONE',
+          indexExcluded: false
         }
         let ti = {
           ...tIndex,
-          indexDifferenceType: 'NONE'
+          indexDifferenceType: 'NONE',
+          indexExcluded: false
         }
         let isDifferentIndex = diff(sIndex, tIndex)
         if (isDifferentIndex) {
@@ -891,13 +900,245 @@ function closeAllTable() {
   }
 }
 
+function resetAllExcluded() {
+  let tablesDifferences
+  if (displayDatabase.value === 'source') {
+    tablesDifferences = sourceTablesDifferences.value
+  } else {
+    tablesDifferences = targetTablesDifferences.value
+  }
+  _.forEach(tablesDifferences, (n) => {
+    if (n.tableExcluded) {
+      n.tableExcluded = false
+    }
+
+    _.forEach(n.columns, (c) => {
+      if (c.columnExcluded) {
+        c.columnExcluded = false
+      }
+    })
+    _.forEach(n.indexes, (i) => {
+      if (i.indexExcluded) {
+        i.indexExcluded = false
+      }
+    })
+  })
+}
+
+function excludeDeleteDifference() {
+  let tablesDifferences
+  if (displayDatabase.value === 'source') {
+    tablesDifferences = sourceTablesDifferences.value
+  } else {
+    tablesDifferences = targetTablesDifferences.value
+  }
+  _.forEach(tablesDifferences, (n) => {
+    if (n.tableDifferenceType === 'DELETE') {
+      n.tableExcluded = true
+    }
+
+    _.forEach(n.columns, (c) => {
+      if (c.columnDifferenceType === 'DELETE') {
+        c.columnExcluded = true
+      }
+    })
+    _.forEach(n.indexes, (i) => {
+      if (i.indexDifferenceType === 'DELETE') {
+        i.indexExcluded = true
+      }
+    })
+  })
+}
+
 function moreHandleCommand(command) {
   if (command === 'closeAllTable') {
     closeAllTable()
+  } else if (command === 'resetAllExcluded') {
+    resetAllExcluded()
+  } else if (command === 'excludeDeleteDifference') {
+    excludeDeleteDifference()
   }
 }
 
-function generateSql() {}
+function generateSql() {
+  let databaseName
+  if (displayDatabase.value === 'source') {
+    databaseName = sourceDatabaseName.value
+  } else {
+    databaseName = targetDatabaseName.value
+  }
+  let tables = _.filter(
+    displayTablesDifferences.value,
+    (n) => n.tableDifferenceType !== 'NONE' && !n.tableExcluded
+  )
+  let tableSqlList = []
+  _.forEach(tables, (t) => {
+    if (t.tableDifferenceType === 'ADD') {
+      tableSqlList.push(generateTableCreateSql(databaseName, t))
+    } else if (t.tableDifferenceType === 'DELETE') {
+      tableSqlList.push(generateTableDeleteSql(databaseName, t))
+    } else if (t.tableDifferenceType === 'UPDATE') {
+      tableSqlList.push(generateTableUpdateSql(databaseName, t))
+    }
+  })
+
+  let sql = _.filter(tableSqlList, (n) => n !== '').join('\r\n\r\n')
+  console.log(sql)
+}
+
+function generateTableCreateSql(databaseName, table) {
+  let tableCommentSql = ''
+  if (table.hasTableComment) {
+    tableCommentSql = ` COMMENT = '${table.tableComment}'`
+  }
+  let columnAndIndexSql = []
+  _.forEach(
+    _.orderBy(table.columns, (n) => n.ordinalPosition),
+    (c) => columnAndIndexSql.push(generateTableCreateColumnSql(c))
+  )
+  _.forEach(table.indexes, (i) => columnAndIndexSql.push(generateTableCreateIndexSql(i)))
+
+  let sql = `CREATE TABLE \`${databaseName}\`.\`${table.tableName}\` (\r\n${columnAndIndexSql.join(',\r\n')}\r\n)${tableCommentSql};`
+  return sql
+}
+
+function generateTableDeleteSql(databaseName, table) {
+  if (table.tableExcluded) {
+    return ''
+  }
+
+  let sql = `DROP TABLE \`${databaseName}\`.\`${table.tableName}\`;`
+  return sql
+}
+
+function generateTableUpdateSql(databaseName, table) {
+  let columnIndexCommentSql = []
+  _.forEach(
+    _.orderBy(
+      _.filter(table.columns, (n) => n.columnDifferenceType !== 'NONE' && !n.columnExcluded),
+      (n) => n.ordinalPosition
+    ),
+    (c) => {
+      columnIndexCommentSql.push(generateTableUpdateColumnSql(c))
+    }
+  )
+
+  _.forEach(
+    _.filter(table.indexes, (n) => n.indexDifferenceType !== 'NONE' && !n.indexExcluded),
+    (i) => columnIndexCommentSql.push(generateTableUpdateIndexSql(i))
+  )
+
+  if (table.tableCommentDifferenceType !== 'NONE' && !table.tableCommentExcluded) {
+    if (table.tableCommentDifferenceType === 'ADD') {
+      columnIndexCommentSql.push(`COMMENT = '${table.tableComment}'`)
+    } else if (table.tableCommentDifferenceType === 'DELETE') {
+      columnIndexCommentSql.push(`COMMENT = ''`)
+    } else if (table.tableCommentDifferenceType === 'UPDATE') {
+      columnIndexCommentSql.push(`COMMENT = '${table.tableCommentUpdate}'`)
+    }
+  }
+
+  if (columnIndexCommentSql.length === 0) {
+    return ''
+  }
+
+  let sql = `ALTER TABLE \`${databaseName}\`.\`${table.tableName}\`\r\n${columnIndexCommentSql.join(',\r\n')};`
+  return sql
+}
+
+function generateTableCreateColumnSql(column) {
+  let columnSql = []
+  columnSql.push(`\`${column.columnName}\``)
+  columnSql.push(column.columnType)
+  if (!column.isNullable) {
+    columnSql.push('NOT NULL')
+  }
+  if (column.hasDefault) {
+    if (column.columnDefault === 'CURRET_TIMESTAMP') {
+      columnSql.push(`DEFAULT CURRET_TIMESTAMP`)
+    } else {
+      columnSql.push(`DEFAULT '${column.columnDefault}'`)
+    }
+  }
+  let extra = column.extra.replace('DEFAULT_GENERATED', '').trim().toUpperCase()
+  if (extra) {
+    columnSql.push(extra)
+  }
+  if (column.hasColumnComment) {
+    columnSql.push(`COMMENT '${column.columnComment}'`)
+  }
+  return columnSql.join(' ')
+}
+
+function generateTableUpdateColumnSql(column) {
+  if (column.columnDifferenceType === 'ADD') {
+    return `ADD COLUMN ${generateTableCreateColumnSql(column)}`
+  } else if (column.columnDifferenceType === 'DELETE') {
+    return `DROP COLUMN \`${column.columnName}\``
+  } else if (column.columnDifferenceType === 'UPDATE') {
+    return `CHANGE COLUMN \`${column.columnName}\` ${generateTableCreateColumnSql(column.update)}`
+  }
+}
+
+function generateTableCreateIndexSql(index) {
+  let indexSql = []
+  if (index.indexName === 'PRIMARY') {
+    indexSql.push('PRIMARY KEY')
+  } else {
+    if (index.nonUnique) {
+      indexSql.push('KEY')
+      indexSql.push(`\`${index.indexName}\``)
+    } else {
+      indexSql.push('UNIQUE KEY')
+      indexSql.push(`\`${index.indexName}\``)
+    }
+  }
+
+  let indexColumnsSql = []
+  _.forEach(
+    _.orderBy(index.columns, (c) => c.seqInIndex),
+    (c) => {
+      indexColumnsSql.push(`\`${c.columnName}\` ${c.collation === 'A' ? 'ASC' : 'DESC'}`)
+    }
+  )
+
+  indexSql.push(`(${indexColumnsSql.join(',')})`)
+  return indexSql.join(' ')
+}
+
+function generateTableUpdateIndexSql(index) {
+  let indexesSql = []
+
+  if (index.indexDifferenceType === 'UPDATE' || index.indexDifferenceType === 'DELETE') {
+    if (index.indexName === 'PRIMARY') {
+      indexesSql.push('DROP PRIMARY KEY')
+    } else {
+      indexesSql.push(`DROP INDEX \`${index.indexName}\``)
+    }
+  }
+
+  let indexSql = []
+  if (index.indexDifferenceType === 'ADD' || index.indexDifferenceType === 'UPDATE') {
+    if (index.indexName === 'PRIMARY') {
+      indexSql.push('ADD PRIMARY KEY')
+    } else {
+      indexSql.push(`ADD${!index.nonUnique ? ' UNIQUE ' : ' '}INDEX \`${index.indexName}\``)
+    }
+
+    let index2 = index.indexDifferenceType === 'ADD' ? index : index.update
+    let indexColumnsSql = []
+    _.forEach(
+      _.orderBy(index2.columns, (c) => c.seqInIndex),
+      (c) => {
+        indexColumnsSql.push(`\`${c.columnName}\` ${c.collation === 'A' ? 'ASC' : 'DESC'}`)
+      }
+    )
+    indexSql.push(`(${indexColumnsSql.join(',')})`)
+
+    indexesSql.push(indexSql.join(' '))
+  }
+  return indexesSql.join(',\r\n')
+}
 
 // step3 end
 </script>
@@ -1109,13 +1350,6 @@ function generateSql() {}
       </div>
 
       <div class="step-container" :class="{ active: isStepActivated('3') }">
-        <!-- <div class="cr-controls2">
-            <el-button type="primary" size="small">收起所有表</el-button>
-          
-          </div> -->
-        <!-- <div class="cr-more">
-            <el-button :icon="MoreFilled" size="small" circle />
-          </div> -->
         <div class="step-content-container step3-content-container">
           <div class="cr-header">
             <div class="cr-database-name">
@@ -1135,6 +1369,12 @@ function generateSql() {}
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="closeAllTable">折叠全部表</el-dropdown-item>
+                    <el-dropdown-item command="resetAllExcluded"
+                      >将所有忽略重置为包含</el-dropdown-item
+                    >
+                    <el-dropdown-item command="excludeDeleteDifference"
+                      >忽略所有删除类型差异</el-dropdown-item
+                    >
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -1165,6 +1405,15 @@ function generateSql() {}
                   <!-- <div class="difference-type n" v-else>无差异</div> -->
                 </div>
                 <div>{{ table.tableName }}</div>
+                <el-switch
+                  v-if="table.tableDifferenceType !== 'NONE'"
+                  class="exclude"
+                  inline-prompt
+                  active-text="忽略"
+                  inactive-text="包含"
+                  size="small"
+                  v-model="table.tableExcluded"
+                />
               </div>
               <div class="cr-table-body" v-show="table.tableExpanded">
                 <div class="cr-table-comment-header">
@@ -1190,6 +1439,18 @@ function generateSql() {}
                     <!-- <div class="difference-type n" v-else>无差异</div> -->
                   </div>
                   <div>Comment</div>
+                  <el-switch
+                    v-if="
+                      table.tableDifferenceType === 'UPDATE' &&
+                      table.tableCommentDifferenceType !== 'NONE'
+                    "
+                    class="exclude"
+                    inline-prompt
+                    active-text="忽略"
+                    inactive-text="包含"
+                    size="small"
+                    v-model="table.tableCommentExcluded"
+                  />
                 </div>
                 <div class="cr-table-comment-body">
                   {{ table.tableComment }}
@@ -1255,6 +1516,18 @@ function generateSql() {}
                         </div>
                       </div>
                       <div>{{ column.columnName }}</div>
+                      <el-switch
+                        v-if="
+                          table.tableDifferenceType === 'UPDATE' &&
+                          column.columnDifferenceType !== 'NONE'
+                        "
+                        class="exclude"
+                        inline-prompt
+                        active-text="忽略"
+                        inactive-text="包含"
+                        size="small"
+                        v-model="column.columnExcluded"
+                      />
                     </div>
                     <!-- <div class="cr-column-body">
                       {{ column.columnType }} {{ column.columnComment }}
@@ -1322,6 +1595,18 @@ function generateSql() {}
                         </div>
                       </div>
                       <div>{{ index.indexName }}</div>
+                      <el-switch
+                        v-if="
+                          table.tableDifferenceType === 'UPDATE' &&
+                          index.indexDifferenceType !== 'NONE'
+                        "
+                        class="exclude"
+                        inline-prompt
+                        active-text="忽略"
+                        inactive-text="包含"
+                        size="small"
+                        v-model="index.indexExcluded"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1333,7 +1618,7 @@ function generateSql() {}
           <el-button type="primary" class="prev" @click="step3Prev"
             >上一步: 提供数据库信息</el-button
           >
-          <el-button type="primary" class="next" @click="generateSql">生成 SQL</el-button>
+          <el-button type="primary" class="next" @click="generateSql">生成数据库同步 SQL</el-button>
         </div>
       </div>
     </div>
@@ -1552,6 +1837,10 @@ body {
 
 .cr-table-header {
   font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: white;
 }
 .cr-table-header,
 .cr-table-comment-header,
@@ -1631,8 +1920,6 @@ body {
   top: 6rem;
   right: 1rem;
 
-  z-index: 2000;
-
   .el-button {
     color: var(--el-button-border-color);
 
@@ -1654,5 +1941,9 @@ body {
       color: var(--el-color-primary);
     }
   }
+}
+
+.exclude {
+  margin-left: 0.4rem;
 }
 </style>
