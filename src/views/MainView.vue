@@ -12,7 +12,7 @@ import 'highlight.js/styles/vs.min.css'
 import { useFloating } from '@floating-ui/vue'
 hljs.registerLanguage('sql', sql)
 
-let step = ref('4')
+let step = ref('1')
 let sourceDatabaseName = ref('')
 let sourceDatabaseRemark = ref('')
 let targetDatabaseName = ref('')
@@ -659,19 +659,23 @@ function compare() {
       if (sTableDifference.hasTableComment && !tTableDifference.hasTableComment) {
         sTableDifference.tableDifferenceType = 'UPDATE'
         sTableDifference.tableCommentDifferenceType = 'DELETE'
+        sTableDifference.tableCommentDifferenceDetails = `表删除备注<br/>原备注: "${sTableDifference.tableComment}"`
 
         tTableDifference.tableDifferenceType = 'UPDATE'
         tTableDifference.tableCommentDifferenceType = 'ADD'
         tTableDifference.tableComment = sTableDifference.tableComment
         tTableDifference.hasTableComment = true
+        tTableDifference.tableCommentDifferenceDetails = `表新增备注<br/>新备注: "${tTableDifference.tableComment}"`
       } else if (!sTableDifference.hasTableComment && tTableDifference.hasTableComment) {
         sTableDifference.tableDifferenceType = 'UPDATE'
         sTableDifference.tableCommentDifferenceType = 'ADD'
         sTableDifference.tableComment = tTableDifference.tableComment
         sTableDifference.hasTableComment = true
+        sTableDifference.tableCommentDifferenceDetails = `表新增备注<br/>新备注: "${sTableDifference.tableComment}"`
 
         tTableDifference.tableDifferenceType = 'UPDATE'
         tTableDifference.tableCommentDifferenceType = 'DELETE'
+        tTableDifference.tableCommentDifferenceDetails = `表删除备注<br/>原备注: "${tTableDifference.tableComment}"`
       } else if (
         sTableDifference.hasTableComment &&
         tTableDifference.hasTableComment &&
@@ -680,10 +684,12 @@ function compare() {
         sTableDifference.tableDifferenceType = 'UPDATE'
         sTableDifference.tableCommentDifferenceType = 'UPDATE'
         sTableDifference.tableCommentUpdate = tTableDifference.tableComment
+        sTableDifference.tableCommentDifferenceDetails = `表更新备注<br/>原备注: "${sTableDifference.tableComment}"<br/>新备注: "${sTableDifference.tableCommentUpdate}"`
 
         tTableDifference.tableDifferenceType = 'UPDATE'
         tTableDifference.tableCommentDifferenceType = 'UPDATE'
         tTableDifference.tableCommentUpdate = sTableDifference.tableComment
+        tTableDifference.tableCommentDifferenceDetails = `表更新备注<br/>原备注: "${tTableDifference.tableComment}"<br/>新备注: "${tTableDifference.tableCommentUpdate}"`
       }
 
       let sTableColumnNames = _.map(sTable.columns, (sc) => sc.columnName)
@@ -696,14 +702,16 @@ function compare() {
           sTableDifference.columns.push({
             ...tColumn,
             columnDifferenceType: 'ADD',
-            columnExcluded: false
+            columnExcluded: false,
+            columnDifferenceDetails: `字段新增<br/>新字段: ${generateTableCreateColumnSql(tColumn)}`
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.columns.push({
             ...tColumn,
             columnDifferenceType: 'DELETE',
-            columnExcluded: false
+            columnExcluded: false,
+            columnDifferenceDetails: `字段删除<br/>原字段: ${generateTableCreateColumnSql(tColumn)}`
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -714,14 +722,16 @@ function compare() {
           sTableDifference.columns.push({
             ...sColumn,
             columnDifferenceType: 'DELETE',
-            columnExcluded: false
+            columnExcluded: false,
+            columnDifferenceDetails: `字段删除<br/>原字段: ${generateTableCreateColumnSql(sColumn)}`
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.columns.push({
             ...sColumn,
             columnDifferenceType: 'ADD',
-            columnExcluded: false
+            columnExcluded: false,
+            columnDifferenceDetails: `字段新增<br/>新字段: ${generateTableCreateColumnSql(sColumn)}`
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -754,10 +764,12 @@ function compare() {
         if (isDifferentColumn) {
           sc.columnDifferenceType = 'UPDATE'
           sc.update = _.cloneDeep(tColumn)
+          sc.columnDifferenceDetails = `字段更新<br/>原字段: ${generateTableCreateColumnSql(sColumn)}<br/>新字段: ${generateTableCreateColumnSql(tColumn)}`
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tc.columnDifferenceType = 'UPDATE'
           tc.update = _.cloneDeep(sColumn)
+          tc.columnDifferenceDetails = `字段更新<br/>原字段: ${generateTableCreateColumnSql(tColumn)}<br/>新字段: ${generateTableCreateColumnSql(sColumn)}`
           tTableDifference.tableDifferenceType = 'UPDATE'
         }
 
@@ -768,22 +780,26 @@ function compare() {
       let sTableColumnDifferenceTypes = _.uniq(
         _.map(sTableDifference.columns, (c) => c.columnDifferenceType)
       )
-      if (sTableColumnDifferenceTypes.length === 1 && sTableColumnDifferenceTypes[0] === 'NONE') {
-        sTableDifference.columnsDifferenceTypes.push('NONE')
-      } else {
-        _.remove(sTableColumnDifferenceTypes, (dt) => dt === 'NONE')
-        sTableDifference.columnsDifferenceTypes = sTableColumnDifferenceTypes
-      }
+      // if (sTableColumnDifferenceTypes.length === 1 && sTableColumnDifferenceTypes[0] === 'NONE') {
+      //   sTableDifference.columnsDifferenceTypes.push('NONE')
+      // } else {
+      //   _.remove(sTableColumnDifferenceTypes, (dt) => dt === 'NONE')
+      //   sTableDifference.columnsDifferenceTypes = sTableColumnDifferenceTypes
+      // }
+      _.remove(sTableColumnDifferenceTypes, (dt) => dt === 'NONE')
+      sTableDifference.columnsDifferenceTypes = sTableColumnDifferenceTypes
 
       let tTableColumnDifferenceTypes = _.uniq(
         _.map(tTableDifference.columns, (c) => c.columnDifferenceType)
       )
-      if (tTableColumnDifferenceTypes.length === 1 && tTableColumnDifferenceTypes[0] === 'NONE') {
-        tTableDifference.columnsDifferenceTypes.push('NONE')
-      } else {
-        _.remove(tTableColumnDifferenceTypes, (dt) => dt === 'NONE')
-        tTableDifference.columnsDifferenceTypes = tTableColumnDifferenceTypes
-      }
+      // if (tTableColumnDifferenceTypes.length === 1 && tTableColumnDifferenceTypes[0] === 'NONE') {
+      //   tTableDifference.columnsDifferenceTypes.push('NONE')
+      // } else {
+      //   _.remove(tTableColumnDifferenceTypes, (dt) => dt === 'NONE')
+      //   tTableDifference.columnsDifferenceTypes = tTableColumnDifferenceTypes
+      // }
+      _.remove(tTableColumnDifferenceTypes, (dt) => dt === 'NONE')
+      tTableDifference.columnsDifferenceTypes = tTableColumnDifferenceTypes
 
       let sTableIndexNames = _.map(sTable.indexes, (si) => si.indexName)
       let tTableIndexNames = _.map(tTable.indexes, (ti) => ti.indexName)
@@ -795,14 +811,20 @@ function compare() {
           sTableDifference.indexes.push({
             ...tIndex,
             indexDifferenceType: 'ADD',
-            indexExcluded: false
+            indexExcluded: false,
+            indexDifferenceDetails: `索引新增<br/>新索引: ${generateTableCreateIndexSql(tIndex)
+              .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+              .replace(/^KEY\b/, 'INDEX')}`
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.indexes.push({
             ...tIndex,
             indexDifferenceType: 'DELETE',
-            indexExcluded: false
+            indexExcluded: false,
+            indexDifferenceDetails: `索引删除<br/>原索引: ${generateTableCreateIndexSql(tIndex)
+              .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+              .replace(/^KEY\b/, 'INDEX')}`
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -813,14 +835,20 @@ function compare() {
           sTableDifference.indexes.push({
             ...sIndex,
             indexDifferenceType: 'DELETE',
-            indexExcluded: false
+            indexExcluded: false,
+            indexDifferenceDetails: `索引删除<br/>原索引: ${generateTableCreateIndexSql(sIndex)
+              .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+              .replace(/^KEY\b/, 'INDEX')}`
           })
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           tTableDifference.indexes.push({
             ...sIndex,
             indexDifferenceType: 'ADD',
-            indexExcluded: false
+            indexExcluded: false,
+            indexDifferenceDetails: `索引新增<br/>新索引: ${generateTableCreateIndexSql(sIndex)
+              .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+              .replace(/^KEY\b/, 'INDEX')}`
           })
           tTableDifference.tableDifferenceType = 'UPDATE'
 
@@ -841,10 +869,21 @@ function compare() {
         if (isDifferentIndex) {
           si.indexDifferenceType = 'UPDATE'
           si.update = _.cloneDeep(tIndex)
+          si.indexDifferenceDetails = `索引更新<br/>原索引: ${generateTableCreateIndexSql(sIndex)
+            .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+            .replace(/^KEY\b/, 'INDEX')}<br/>新索引: ${generateTableCreateIndexSql(tIndex)
+            .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+            .replace(/^KEY\b/, 'INDEX')}`
           sTableDifference.tableDifferenceType = 'UPDATE'
 
           ti.indexDifferenceType = 'UPDATE'
           ti.update = _.cloneDeep(sIndex)
+          ti.indexDifferenceDetails = `索引更新<br/>原索引: ${generateTableCreateIndexSql(tIndex)
+            .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+            .replace(/^KEY\b/, 'INDEX')}<br/>新索引: ${generateTableCreateIndexSql(sIndex)
+            .replace(/^UNIQUE\s+KEY\b/, 'UNIQUE INDEX')
+            .replace(/^KEY\b/, 'INDEX')}`
+
           tTableDifference.tableDifferenceType = 'UPDATE'
         }
 
@@ -856,22 +895,14 @@ function compare() {
     let sTableIndexDifferenceTypes = _.uniq(
       _.map(sTableDifference.indexes, (c) => c.indexDifferenceType)
     )
-    if (sTableIndexDifferenceTypes.length === 1 && sTableIndexDifferenceTypes[0] === 'NONE') {
-      sTableDifference.indexesDifferenceTypes.push('NONE')
-    } else {
-      _.remove(sTableIndexDifferenceTypes, (dt) => dt === 'NONE')
-      sTableDifference.indexesDifferenceTypes = sTableIndexDifferenceTypes
-    }
+    _.remove(sTableIndexDifferenceTypes, (dt) => dt === 'NONE')
+    sTableDifference.indexesDifferenceTypes = sTableIndexDifferenceTypes
 
     let tTableIndexDifferenceTypes = _.uniq(
       _.map(tTableDifference.indexes, (c) => c.indexDifferenceType)
     )
-    if (tTableIndexDifferenceTypes.length === 1 && tTableIndexDifferenceTypes[0] === 'NONE') {
-      tTableDifference.indexesDifferenceTypes.push('NONE')
-    } else {
-      _.remove(tTableIndexDifferenceTypes, (dt) => dt === 'NONE')
-      tTableDifference.indexesDifferenceTypes = tTableIndexDifferenceTypes
-    }
+    _.remove(tTableIndexDifferenceTypes, (dt) => dt === 'NONE')
+    tTableDifference.indexesDifferenceTypes = tTableIndexDifferenceTypes
 
     sTablesDifferences.push(sTableDifference)
     tTablesDifferences.push(tTableDifference)
@@ -1493,7 +1524,7 @@ function copyFinalSqlOnClick() {
                       table.tableCommentDifferenceType !== 'NONE'
                     "
                   >
-                    <el-tooltip content="查看差异详情">
+                    <el-tooltip :content="table.tableCommentDifferenceDetails" raw-content>
                       <div class="difference-details">
                         <el-icon><Tickets /></el-icon>
                       </div>
@@ -1583,7 +1614,7 @@ function copyFinalSqlOnClick() {
                           column.columnDifferenceType !== 'NONE'
                         "
                       >
-                        <el-tooltip content="查看差异详情">
+                        <el-tooltip :content="column.columnDifferenceDetails" raw-content>
                           <div class="difference-details">
                             <el-icon><Tickets /></el-icon>
                           </div>
@@ -1672,7 +1703,7 @@ function copyFinalSqlOnClick() {
                           index.indexDifferenceType !== 'NONE'
                         "
                       >
-                        <el-tooltip content="查看差异详情">
+                        <el-tooltip :content="index.indexDifferenceDetails" raw-content>
                           <div class="difference-details">
                             <el-icon><Tickets /></el-icon>
                           </div>
