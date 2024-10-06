@@ -1,14 +1,18 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { Plus, Minus } from '@element-plus/icons-vue'
+import { Plus, Minus, MoreFilled, ArrowRight, Tickets } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import _ from 'lodash'
 import copy from 'copy-text-to-clipboard'
 import XLSX from 'xlsx'
 import { diff } from 'deep-diff'
-import { MoreFilled, ArrowRight } from '@element-plus/icons-vue'
+import hljs from 'highlight.js/lib/core'
+import sql from 'highlight.js/lib/languages/sql'
+import 'highlight.js/styles/vs.min.css'
+import { useFloating } from '@floating-ui/vue'
+hljs.registerLanguage('sql', sql)
 
-let step = ref('3')
+let step = ref('4')
 let sourceDatabaseName = ref('')
 let sourceDatabaseRemark = ref('')
 let targetDatabaseName = ref('')
@@ -36,6 +40,27 @@ let sourceTablesDifferences = ref([])
 let targetTablesDifferences = ref([])
 let displayDatabase = ref('target') // source, target
 let displayTable = ref('difference') // all, difference
+let finalSql = ref('')
+let finalSqlHighlightHtml = ref('')
+let floating = ref(null)
+let floatingReference = ref(null)
+floatingReference.value = {
+  getBoundingClientRect() {
+    return {
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 20,
+      right: 20,
+      width: 20,
+      height: 20
+    }
+  }
+}
+const { floatingStyles } = useFloating(floatingReference, floating, {
+  placement: 'bottom-start'
+})
 
 let isStepActivated = computed(() => {
   return (s) => s === step.value
@@ -982,8 +1007,10 @@ function generateSql() {
     }
   })
 
-  let sql = _.filter(tableSqlList, (n) => n !== '').join('\r\n\r\n')
-  console.log(sql)
+  finalSql.value = _.filter(tableSqlList, (n) => n !== '').join('\r\n\r\n')
+  console.log(finalSql.value)
+  finalSqlHighlightHtml.value = hljs.highlight(finalSql.value, { language: 'sql' }).value
+  console.log(finalSqlHighlightHtml.value)
 }
 
 function generateTableCreateSql(databaseName, table) {
@@ -1054,8 +1081,8 @@ function generateTableCreateColumnSql(column) {
     columnSql.push('NOT NULL')
   }
   if (column.hasDefault) {
-    if (column.columnDefault === 'CURRET_TIMESTAMP') {
-      columnSql.push(`DEFAULT CURRET_TIMESTAMP`)
+    if (column.columnDefault === 'CURRENT_TIMESTAMP') {
+      columnSql.push(`DEFAULT CURRENT_TIMESTAMP`)
     } else {
       columnSql.push(`DEFAULT '${column.columnDefault}'`)
     }
@@ -1140,7 +1167,45 @@ function generateTableUpdateIndexSql(index) {
   return indexesSql.join(',\r\n')
 }
 
+// function differenceElementOnClick({ clientX, clientY }) {
+//   floatingReference.value = {
+//     getBoundingClientRect() {
+//       return {
+//         width: 0,
+//         height: 0,
+//         x: clientX,
+//         y: clientY,
+//         top: clientY,
+//         left: clientX,
+//         right: clientX,
+//         bottom: clientY
+//       }
+//     }
+//   }
+// }
+
+function step3Next() {
+  generateSql()
+  step.value = '4'
+}
+
 // step3 end
+
+// step4 begin
+function step4Prev() {
+  step.value = '3'
+}
+
+function copyFinalSqlOnClick() {
+  copy(finalSql.value)
+  ElMessage({
+    type: 'success',
+    grouping: true,
+    message: '数据库同步 SQL 已复制'
+  })
+}
+
+// step4 end
 </script>
 
 <template>
@@ -1159,6 +1224,10 @@ function generateTableUpdateIndexSql(index) {
           <el-icon><ArrowRight /></el-icon>
         </div>
         <div class="step-tab" :class="{ active: isStepActivated('3') }">③ 比较差异</div>
+        <div class="step-tab-split">
+          <el-icon><ArrowRight /></el-icon>
+        </div>
+        <div class="step-tab" :class="{ active: isStepActivated('4') }">④ 生成数据库同步 SQL</div>
       </div>
       <div class="step-container" :class="{ active: isStepActivated('1') }">
         <div class="step-content-container step1-content-container">
@@ -1380,7 +1449,6 @@ function generateTableUpdateIndexSql(index) {
               </el-dropdown>
             </div>
           </div>
-
           <div class="cr-tables">
             <div class="cr-table" v-for="table in displayTablesDifferences" :key="table.tableName">
               <div class="cr-table-header">
@@ -1392,6 +1460,7 @@ function generateTableUpdateIndexSql(index) {
                     <Minus />
                   </el-icon>
                 </div>
+                <div>{{ table.tableName }}</div>
                 <div class="difference-types">
                   <div class="difference-type a" v-if="table.tableDifferenceType === 'ADD'">
                     新增
@@ -1404,7 +1473,7 @@ function generateTableUpdateIndexSql(index) {
                   </div>
                   <!-- <div class="difference-type n" v-else>无差异</div> -->
                 </div>
-                <div>{{ table.tableName }}</div>
+
                 <el-switch
                   v-if="table.tableDifferenceType !== 'NONE'"
                   class="exclude"
@@ -1417,69 +1486,88 @@ function generateTableUpdateIndexSql(index) {
               </div>
               <div class="cr-table-body" v-show="table.tableExpanded">
                 <div class="cr-table-comment-header">
-                  <div class="difference-types" v-if="table.tableDifferenceType === 'UPDATE'">
-                    <div
-                      class="difference-type a"
-                      v-if="table.tableCommentDifferenceType === 'ADD'"
-                    >
-                      新增
-                    </div>
-                    <div
-                      class="difference-type u"
-                      v-else-if="table.tableCommentDifferenceType === 'UPDATE'"
-                    >
-                      更新
-                    </div>
-                    <div
-                      class="difference-type d"
-                      v-else-if="table.tableCommentDifferenceType === 'DELETE'"
-                    >
-                      删除
-                    </div>
-                    <!-- <div class="difference-type n" v-else>无差异</div> -->
-                  </div>
                   <div>Comment</div>
-                  <el-switch
+                  <template
                     v-if="
                       table.tableDifferenceType === 'UPDATE' &&
                       table.tableCommentDifferenceType !== 'NONE'
                     "
-                    class="exclude"
-                    inline-prompt
-                    active-text="忽略"
-                    inactive-text="包含"
-                    size="small"
-                    v-model="table.tableCommentExcluded"
-                  />
+                  >
+                    <el-tooltip content="查看差异详情">
+                      <div class="difference-details">
+                        <el-icon><Tickets /></el-icon>
+                      </div>
+                    </el-tooltip>
+                    <div class="difference-types" v-if="table.tableDifferenceType === 'UPDATE'">
+                      <div
+                        class="difference-type a"
+                        v-if="table.tableCommentDifferenceType === 'ADD'"
+                      >
+                        新增
+                      </div>
+                      <div
+                        class="difference-type u"
+                        v-else-if="table.tableCommentDifferenceType === 'UPDATE'"
+                      >
+                        更新
+                      </div>
+                      <div
+                        class="difference-type d"
+                        v-else-if="table.tableCommentDifferenceType === 'DELETE'"
+                      >
+                        删除
+                      </div>
+                    </div>
+
+                    <el-switch
+                      class="exclude"
+                      inline-prompt
+                      active-text="忽略"
+                      inactive-text="包含"
+                      size="small"
+                      v-model="table.tableCommentExcluded"
+                    />
+                  </template>
                 </div>
                 <div class="cr-table-comment-body">
-                  {{ table.tableComment }}
+                  {{
+                    table.tableCommentDifferenceType === 'UPDATE'
+                      ? table.tableCommentUpdate
+                      : table.tableComment
+                  }}
                 </div>
                 <div class="cr-columns-header">
-                  <div class="difference-types" v-if="table.tableDifferenceType === 'UPDATE'">
-                    <div
-                      class="difference-type"
-                      :class="{
-                        a: dt === 'ADD',
-                        u: dt === 'UPDATE',
-                        d: dt === 'DELETE',
-                        n: dt === 'NONE'
-                      }"
-                      v-for="dt in _.filter(table.columnsDifferenceTypes, (n) => n !== 'NONE')"
-                      :key="dt"
-                    >
-                      {{
-                        dt === 'ADD'
-                          ? '新增'
-                          : dt === 'UPDATE'
-                            ? '更新'
-                            : dt === 'DELETE'
-                              ? '删除'
-                              : '无变化'
-                      }}
-                    </div>
-                  </div>
                   <div>Columns</div>
+                  <template
+                    v-if="
+                      table.tableDifferenceType === 'UPDATE' &&
+                      table.columnsDifferenceTypes.length !== 0
+                    "
+                  >
+                    <div class="difference-types">
+                      <div
+                        class="difference-type"
+                        :class="{
+                          a: dt === 'ADD',
+                          u: dt === 'UPDATE',
+                          d: dt === 'DELETE',
+                          n: dt === 'NONE'
+                        }"
+                        v-for="dt in _.filter(table.columnsDifferenceTypes, (n) => n !== 'NONE')"
+                        :key="dt"
+                      >
+                        {{
+                          dt === 'ADD'
+                            ? '新增'
+                            : dt === 'UPDATE'
+                              ? '更新'
+                              : dt === 'DELETE'
+                                ? '删除'
+                                : '无变化'
+                        }}
+                      </div>
+                    </div>
+                  </template>
                 </div>
                 <div class="cr-columns-body">
                   <div
@@ -1488,54 +1576,65 @@ function generateTableUpdateIndexSql(index) {
                     :key="table.tableName + ':' + column.columnName"
                   >
                     <div class="cr-column-header">
-                      <div
-                        class="difference-types"
+                      <div>{{ column.columnName }}</div>
+                      <template
                         v-if="
                           table.tableDifferenceType === 'UPDATE' &&
                           column.columnDifferenceType !== 'NONE'
                         "
                       >
-                        <div
-                          class="difference-type"
-                          :class="{
-                            a: column.columnDifferenceType === 'ADD',
-                            u: column.columnDifferenceType === 'UPDATE',
-                            d: column.columnDifferenceType === 'DELETE',
-                            n: column.columnDifferenceType === 'NONE'
-                          }"
-                        >
-                          {{
-                            column.columnDifferenceType === 'ADD'
-                              ? '新增'
-                              : column.columnDifferenceType === 'UPDATE'
-                                ? '更新'
-                                : column.columnDifferenceType === 'DELETE'
-                                  ? '删除'
-                                  : '无变化'
-                          }}
+                        <el-tooltip content="查看差异详情">
+                          <div class="difference-details">
+                            <el-icon><Tickets /></el-icon>
+                          </div>
+                        </el-tooltip>
+                        <div class="difference-types">
+                          <div
+                            class="difference-type"
+                            :class="{
+                              a: column.columnDifferenceType === 'ADD',
+                              u: column.columnDifferenceType === 'UPDATE',
+                              d: column.columnDifferenceType === 'DELETE',
+                              n: column.columnDifferenceType === 'NONE'
+                            }"
+                          >
+                            {{
+                              column.columnDifferenceType === 'ADD'
+                                ? '新增'
+                                : column.columnDifferenceType === 'UPDATE'
+                                  ? '更新'
+                                  : column.columnDifferenceType === 'DELETE'
+                                    ? '删除'
+                                    : '无变化'
+                            }}
+                          </div>
                         </div>
-                      </div>
-                      <div>{{ column.columnName }}</div>
-                      <el-switch
-                        v-if="
-                          table.tableDifferenceType === 'UPDATE' &&
-                          column.columnDifferenceType !== 'NONE'
-                        "
-                        class="exclude"
-                        inline-prompt
-                        active-text="忽略"
-                        inactive-text="包含"
-                        size="small"
-                        v-model="column.columnExcluded"
-                      />
+
+                        <el-switch
+                          v-if="
+                            table.tableDifferenceType === 'UPDATE' &&
+                            column.columnDifferenceType !== 'NONE'
+                          "
+                          class="exclude"
+                          inline-prompt
+                          active-text="忽略"
+                          inactive-text="包含"
+                          size="small"
+                          v-model="column.columnExcluded"
+                        />
+                      </template>
                     </div>
-                    <!-- <div class="cr-column-body">
-                      {{ column.columnType }} {{ column.columnComment }}
-                    </div> -->
                   </div>
                 </div>
                 <div class="cr-indexes-header">
-                  <div class="difference-types" v-if="table.tableDifferenceType === 'UPDATE'">
+                  <div>Indexes</div>
+                  <div
+                    class="difference-types"
+                    v-if="
+                      table.tableDifferenceType === 'UPDATE' &&
+                      table.indexesDifferenceTypes.length > 0
+                    "
+                  >
                     <div
                       class="difference-type"
                       v-for="dt in _.filter(table.indexesDifferenceTypes, (n) => n !== 'NONE')"
@@ -1558,7 +1657,6 @@ function generateTableUpdateIndexSql(index) {
                       }}
                     </div>
                   </div>
-                  <div>Indexes</div>
                 </div>
                 <div class="cr-indexes-body">
                   <div
@@ -1567,46 +1665,49 @@ function generateTableUpdateIndexSql(index) {
                     :key="table.tableName + ':' + index.indexName"
                   >
                     <div class="cr-index-header">
-                      <div
-                        class="difference-types"
+                      <div>{{ index.indexName }}</div>
+                      <template
                         v-if="
                           table.tableDifferenceType === 'UPDATE' &&
                           index.indexDifferenceType !== 'NONE'
                         "
                       >
-                        <div
-                          class="difference-type"
-                          :class="{
-                            a: index.indexDifferenceType === 'ADD',
-                            u: index.indexDifferenceType === 'UPDATE',
-                            d: index.indexDifferenceType === 'DELETE',
-                            n: index.indexDifferenceType === 'NONE'
-                          }"
-                        >
-                          {{
-                            index.indexDifferenceType === 'ADD'
-                              ? '新增'
-                              : index.indexDifferenceType === 'UPDATE'
-                                ? '更新'
-                                : index.indexDifferenceType === 'DELETE'
-                                  ? '删除'
-                                  : '无变化'
-                          }}
+                        <el-tooltip content="查看差异详情">
+                          <div class="difference-details">
+                            <el-icon><Tickets /></el-icon>
+                          </div>
+                        </el-tooltip>
+                        <div class="difference-types">
+                          <div
+                            class="difference-type"
+                            :class="{
+                              a: index.indexDifferenceType === 'ADD',
+                              u: index.indexDifferenceType === 'UPDATE',
+                              d: index.indexDifferenceType === 'DELETE',
+                              n: index.indexDifferenceType === 'NONE'
+                            }"
+                          >
+                            {{
+                              index.indexDifferenceType === 'ADD'
+                                ? '新增'
+                                : index.indexDifferenceType === 'UPDATE'
+                                  ? '更新'
+                                  : index.indexDifferenceType === 'DELETE'
+                                    ? '删除'
+                                    : '无变化'
+                            }}
+                          </div>
                         </div>
-                      </div>
-                      <div>{{ index.indexName }}</div>
-                      <el-switch
-                        v-if="
-                          table.tableDifferenceType === 'UPDATE' &&
-                          index.indexDifferenceType !== 'NONE'
-                        "
-                        class="exclude"
-                        inline-prompt
-                        active-text="忽略"
-                        inactive-text="包含"
-                        size="small"
-                        v-model="index.indexExcluded"
-                      />
+
+                        <el-switch
+                          class="exclude"
+                          inline-prompt
+                          active-text="忽略"
+                          inactive-text="包含"
+                          size="small"
+                          v-model="index.indexExcluded"
+                        />
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -1618,11 +1719,23 @@ function generateTableUpdateIndexSql(index) {
           <el-button type="primary" class="prev" @click="step3Prev"
             >上一步: 提供数据库信息</el-button
           >
-          <el-button type="primary" class="next" @click="generateSql">生成数据库同步 SQL</el-button>
+          <el-button type="primary" class="next" @click="step3Next"
+            >下一步: 生成数据库同步 SQL</el-button
+          >
+        </div>
+      </div>
+      <div class="step-container" :class="{ active: isStepActivated('4') }">
+        <div class="step-content-container step4-content-container">
+          <pre v-html="finalSqlHighlightHtml"></pre>
+        </div>
+        <div class="step-nav">
+          <el-button type="primary" class="prev" @click="step4Prev">上一步: 比较差异</el-button>
+          <el-button type="primary" class="next" @click="copyFinalSqlOnClick">拷贝 SQL</el-button>
         </div>
       </div>
     </div>
   </div>
+  <div class="difference-tip" ref="floating" :style="floatingStyles">哈哈</div>
 </template>
 
 <style lang="scss">
@@ -1872,6 +1985,7 @@ body {
 .difference-types {
   display: flex;
   flex-direction: row;
+  margin-left: 0.5rem;
 }
 .difference-type {
   color: white;
@@ -1895,6 +2009,16 @@ body {
 
   &.n {
     background-color: #909399;
+  }
+}
+
+.difference-details {
+  display: flex;
+  align-items: center;
+  margin: 0 0.5rem;
+  cursor: pointer;
+  & + .difference-types {
+    margin-left: 0;
   }
 }
 
@@ -1944,6 +2068,40 @@ body {
 }
 
 .exclude {
-  margin-left: 0.4rem;
+  // margin-left: 0.4rem;
+}
+
+.final-sql-dialog {
+  .el-textarea__inner {
+    height: 50rem;
+    resize: none;
+    padding: 0.4rem;
+    white-space: nowrap;
+    border-radius: 0;
+  }
+}
+
+.step4-content-container {
+  min-height: 40rem;
+  overflow: auto;
+  padding: 1rem;
+
+  pre {
+    margin: 0;
+  }
+}
+
+.difference-tip {
+  width: 30rem;
+  border: 1px solid var(--el-border-color);
+  border-radius: 0.5rem;
+  position: absolute;
+  top: 0;
+  left: 0;
+  background-color: white;
+  padding: 0.4rem;
+  box-shadow: 0px 1px 5px 1px var(--el-border-color);
+  z-index: 2001;
+  display: none;
 }
 </style>
