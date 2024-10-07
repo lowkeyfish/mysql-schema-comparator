@@ -9,7 +9,6 @@ import { diff } from 'deep-diff'
 import hljs from 'highlight.js/lib/core'
 import sql from 'highlight.js/lib/languages/sql'
 import 'highlight.js/styles/vs.min.css'
-import { useFloating } from '@floating-ui/vue'
 hljs.registerLanguage('sql', sql)
 
 let step = ref('1')
@@ -26,41 +25,28 @@ let tableNames = ref([
 ])
 let sourceTables = ref([])
 let sourceTablesFile = ref(null)
+let isSourceTablesProvided = ref(false)
 let sourceColumns = ref([])
 let sourceColumnsFile = ref(null)
+let isSourceColumnsProvided = ref(false)
 let sourceIndexes = ref([])
 let sourceIndexesFile = ref(null)
+let isSourceIndexesProvided = ref(false)
 let targetTables = ref([])
 let targetTablesFile = ref(null)
+let isTargetTablesProvided = ref(false)
 let targetColumns = ref([])
 let targetColumnsFile = ref(null)
+let isTargetColumnsProvided = ref(false)
 let targetIndexes = ref([])
 let targetIndexesFile = ref(null)
+let isTargetIndexesProvided = ref(false)
 let sourceTablesDifferences = ref([])
 let targetTablesDifferences = ref([])
 let displayDatabase = ref('target') // source, target
 let displayTable = ref('difference') // all, difference
 let finalSql = ref('')
 let finalSqlHighlightHtml = ref('')
-let floating = ref(null)
-let floatingReference = ref(null)
-floatingReference.value = {
-  getBoundingClientRect() {
-    return {
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      bottom: 20,
-      right: 20,
-      width: 20,
-      height: 20
-    }
-  }
-}
-const { floatingStyles } = useFloating(floatingReference, floating, {
-  placement: 'bottom-start'
-})
 
 let isStepActivated = computed(() => {
   return (s) => s === step.value
@@ -77,12 +63,6 @@ let validTableNames = computed(() =>
     )
   )
 )
-let isSourceTablesReady = computed(() => sourceTables.value.length > 0)
-let isSourceColumnsReady = computed(() => sourceColumns.value.length > 0)
-let isSourceIndexesReady = computed(() => sourceIndexes.value.length > 0)
-let isTargetTablesReady = computed(() => targetTables.value.length > 0)
-let isTargetColumnsReady = computed(() => targetColumns.value.length > 0)
-let isTargetIndexesReady = computed(() => targetIndexes.value.length > 0)
 let displayDatabaseName = computed(() => {
   if (displayDatabase.value === 'source') {
     return (
@@ -108,8 +88,6 @@ let displayTablesDifferences = computed(() => {
   }
   return tables
 })
-// let displayAllTable = computed(() => displayTable.value === 'all')
-// let displayDifferenceTable = computed(() => displayTable.value === 'difference')
 
 // step1 begin
 
@@ -165,18 +143,6 @@ function step1Next() {
 
 function step1ToStep2() {
   step.value = '2'
-  // sourceTables.value = []
-  // sourceTablesFile.value.value = ''
-  // sourceColumns.value = []
-  // sourceColumnsFile.value.value = ''
-  // sourceIndexes.value = []
-  // sourceIndexesFile.value.value = ''
-  // targetTables.value = []
-  // targetTablesFile.value.value = ''
-  // targetColumns.value = []
-  // targetColumnsFile.value.value = ''
-  // targetIndexes.value = []
-  // targetIndexesFile.value.value = ''
 }
 
 // step1 end
@@ -370,18 +336,21 @@ function fileOnChange(isSource, type) {
   if (isSource) {
     if (type === 'tables') {
       sourceTables.value = []
+      isSourceTablesProvided.value = false
       let files = sourceTablesFile.value.files
       if (files.length > 0) {
         file = files[0]
       }
     } else if (type === 'columns') {
       sourceColumns.value = []
+      isSourceColumnsProvided.value = false
       let files = sourceColumnsFile.value.files
       if (files.length > 0) {
         file = files[0]
       }
     } else if (type === 'indexes') {
       sourceIndexes.value = []
+      isSourceIndexesProvided.value = false
       let files = sourceIndexesFile.value.files
       if (files.length > 0) {
         file = files[0]
@@ -390,18 +359,21 @@ function fileOnChange(isSource, type) {
   } else {
     if (type === 'tables') {
       targetTables.value = []
+      isTargetTablesProvided.value = false
       let files = targetTablesFile.value.files
       if (files.length > 0) {
         file = files[0]
       }
     } else if (type === 'columns') {
       targetColumns.value = []
+      isTargetColumnsProvided.value = false
       let files = targetColumnsFile.value.files
       if (files.length > 0) {
         file = files[0]
       }
     } else if (type === 'indexes') {
       targetIndexes.value = []
+      isTargetIndexesProvided.value = false
       let files = targetIndexesFile.value.files
       if (files.length > 0) {
         file = files[0]
@@ -421,8 +393,10 @@ function fileOnChange(isSource, type) {
       if (schemaValid) {
         if (isSource) {
           sourceTables.value = json
+          isSourceTablesProvided.value = true
         } else {
           targetTables.value = json
+          isTargetTablesProvided.value = true
         }
       }
       message = '表信息文件数据结构无效'
@@ -431,8 +405,10 @@ function fileOnChange(isSource, type) {
       if (schemaValid) {
         if (isSource) {
           sourceColumns.value = json
+          isSourceColumnsProvided.value = true
         } else {
           targetColumns.value = json
+          isTargetColumnsProvided.value = true
         }
       }
       message = '字段信息文件数据结构无效'
@@ -441,8 +417,10 @@ function fileOnChange(isSource, type) {
       if (schemaValid) {
         if (isSource) {
           sourceIndexes.value = json
+          isSourceIndexesProvided.value = true
         } else {
           targetIndexes.value = json
+          isTargetIndexesProvided.value = true
         }
       }
       message = '索引信息文件数据结构无效'
@@ -459,7 +437,7 @@ function fileOnChange(isSource, type) {
 }
 
 function step2Next() {
-  if (!isSourceTablesReady.value) {
+  if (!isSourceTablesProvided.value) {
     ElMessage({
       type: 'warning',
       grouping: true,
@@ -467,7 +445,7 @@ function step2Next() {
     })
     return
   }
-  if (!isSourceColumnsReady.value) {
+  if (!isSourceColumnsProvided.value) {
     ElMessage({
       type: 'warning',
       grouping: true,
@@ -475,7 +453,7 @@ function step2Next() {
     })
     return
   }
-  if (!isSourceIndexesReady.value) {
+  if (!isSourceIndexesProvided.value) {
     ElMessage({
       type: 'warning',
       grouping: true,
@@ -483,7 +461,7 @@ function step2Next() {
     })
     return
   }
-  if (!isTargetTablesReady.value) {
+  if (!isTargetTablesProvided.value) {
     ElMessage({
       type: 'warning',
       grouping: true,
@@ -491,7 +469,7 @@ function step2Next() {
     })
     return
   }
-  if (!isTargetColumnsReady.value) {
+  if (!isTargetColumnsProvided.value) {
     ElMessage({
       type: 'warning',
       grouping: true,
@@ -499,7 +477,7 @@ function step2Next() {
     })
     return
   }
-  if (!isTargetIndexesReady.value) {
+  if (!isTargetIndexesProvided.value) {
     ElMessage({
       type: 'warning',
       grouping: true,
@@ -508,8 +486,18 @@ function step2Next() {
     return
   }
 
-  step.value = '3'
   compare()
+
+  if (sourceTablesDifferences.value.length == 0 && targetTablesDifferences.value.length === 0) {
+    ElMessage({
+      type: 'error',
+      grouping: true,
+      message: '源数据库和目标数据库都未提供表数据, 不需要进行差异比较'
+    })
+    return
+  }
+
+  step.value = '3'
 }
 
 function tables(originalTables, originalColumns, originalIndexes) {
@@ -780,24 +768,12 @@ function compare() {
       let sTableColumnDifferenceTypes = _.uniq(
         _.map(sTableDifference.columns, (c) => c.columnDifferenceType)
       )
-      // if (sTableColumnDifferenceTypes.length === 1 && sTableColumnDifferenceTypes[0] === 'NONE') {
-      //   sTableDifference.columnsDifferenceTypes.push('NONE')
-      // } else {
-      //   _.remove(sTableColumnDifferenceTypes, (dt) => dt === 'NONE')
-      //   sTableDifference.columnsDifferenceTypes = sTableColumnDifferenceTypes
-      // }
       _.remove(sTableColumnDifferenceTypes, (dt) => dt === 'NONE')
       sTableDifference.columnsDifferenceTypes = sTableColumnDifferenceTypes
 
       let tTableColumnDifferenceTypes = _.uniq(
         _.map(tTableDifference.columns, (c) => c.columnDifferenceType)
       )
-      // if (tTableColumnDifferenceTypes.length === 1 && tTableColumnDifferenceTypes[0] === 'NONE') {
-      //   tTableDifference.columnsDifferenceTypes.push('NONE')
-      // } else {
-      //   _.remove(tTableColumnDifferenceTypes, (dt) => dt === 'NONE')
-      //   tTableDifference.columnsDifferenceTypes = tTableColumnDifferenceTypes
-      // }
       _.remove(tTableColumnDifferenceTypes, (dt) => dt === 'NONE')
       tTableDifference.columnsDifferenceTypes = tTableColumnDifferenceTypes
 
@@ -1039,9 +1015,7 @@ function generateSql() {
   })
 
   finalSql.value = _.filter(tableSqlList, (n) => n !== '').join('\r\n\r\n')
-  console.log(finalSql.value)
   finalSqlHighlightHtml.value = hljs.highlight(finalSql.value, { language: 'sql' }).value
-  console.log(finalSqlHighlightHtml.value)
 }
 
 function generateTableCreateSql(databaseName, table) {
@@ -1198,25 +1172,18 @@ function generateTableUpdateIndexSql(index) {
   return indexesSql.join(',\r\n')
 }
 
-// function differenceElementOnClick({ clientX, clientY }) {
-//   floatingReference.value = {
-//     getBoundingClientRect() {
-//       return {
-//         width: 0,
-//         height: 0,
-//         x: clientX,
-//         y: clientY,
-//         top: clientY,
-//         left: clientX,
-//         right: clientX,
-//         bottom: clientY
-//       }
-//     }
-//   }
-// }
-
 function step3Next() {
   generateSql()
+
+  if (_.trim(finalSql.value) === '') {
+    ElMessage({
+      type: 'warning',
+      grouping: true,
+      message: '无差异可用于生成数据库同步 SQL'
+    })
+    return
+  }
+
   step.value = '4'
 }
 
@@ -1324,7 +1291,7 @@ function copyFinalSqlOnClick() {
         <div class="step-content-container step2-content-container">
           <div class="step2-content-left">
             <div class="block-title">
-              源数据库表信息<template v-if="isSourceTablesReady">
+              源数据库表信息<template v-if="isSourceTablesProvided">
                 <span style="color: var(--el-color-success); margin: 0 1rem">已提供</span></template
               >
             </div>
@@ -1342,7 +1309,7 @@ function copyFinalSqlOnClick() {
               />
             </div>
             <div class="block-title">
-              源数据库字段信息<template v-if="isSourceColumnsReady"
+              源数据库字段信息<template v-if="isSourceColumnsProvided"
                 ><span style="color: var(--el-color-success); margin: 0 1rem"
                   >已提供</span
                 ></template
@@ -1362,7 +1329,7 @@ function copyFinalSqlOnClick() {
               />
             </div>
             <div class="block-title">
-              源数据库索引信息<template v-if="isSourceIndexesReady"
+              源数据库索引信息<template v-if="isSourceIndexesProvided"
                 ><span style="color: var(--el-color-success); margin: 0 1rem"
                   >已提供</span
                 ></template
@@ -1385,7 +1352,7 @@ function copyFinalSqlOnClick() {
           <div class="step2-content-right">
             <div class="block-title">
               目标数据库表信息
-              <template v-if="isTargetTablesReady"
+              <template v-if="isTargetTablesProvided"
                 ><span style="color: var(--el-color-success); margin: 0 1rem">已提供</span>
               </template>
             </div>
@@ -1404,7 +1371,7 @@ function copyFinalSqlOnClick() {
             </div>
             <div class="block-title">
               目标数据库字段信息
-              <template v-if="isTargetColumnsReady">
+              <template v-if="isTargetColumnsProvided">
                 <span style="color: var(--el-color-success); margin: 0 1rem">已提供</span></template
               >
             </div>
@@ -1422,7 +1389,7 @@ function copyFinalSqlOnClick() {
               />
             </div>
             <div class="block-title">
-              目标数据库索引信息<template v-if="isTargetIndexesReady"
+              目标数据库索引信息<template v-if="isTargetIndexesProvided"
                 ><span style="color: var(--el-color-success); margin: 0 1rem"
                   >已提供</span
                 ></template
@@ -1502,7 +1469,9 @@ function copyFinalSqlOnClick() {
                   <div class="difference-type d" v-else-if="table.tableDifferenceType === 'DELETE'">
                     删除
                   </div>
-                  <!-- <div class="difference-type n" v-else>无差异</div> -->
+                  <div class="difference-type n" v-else-if="table.tableDifferenceType === 'NONE'">
+                    无差异
+                  </div>
                 </div>
 
                 <el-switch
@@ -1744,6 +1713,7 @@ function copyFinalSqlOnClick() {
                 </div>
               </div>
             </div>
+            <div class="cr-tables-empty" v-if="displayTablesDifferences.length === 0">无数据</div>
           </div>
         </div>
         <div class="step-nav">
@@ -1766,7 +1736,6 @@ function copyFinalSqlOnClick() {
       </div>
     </div>
   </div>
-  <div class="difference-tip" ref="floating" :style="floatingStyles">哈哈</div>
 </template>
 
 <style lang="scss">
@@ -1977,6 +1946,7 @@ body {
   overflow: auto;
   padding: 0 1rem;
   position: relative;
+  min-height: 40rem;
 }
 
 .cr-table-header {
@@ -2039,7 +2009,7 @@ body {
   }
 
   &.n {
-    background-color: #909399;
+    background-color: rgb(177.3, 179.4, 183.6);
   }
 }
 
@@ -2098,20 +2068,6 @@ body {
   }
 }
 
-.exclude {
-  // margin-left: 0.4rem;
-}
-
-.final-sql-dialog {
-  .el-textarea__inner {
-    height: 50rem;
-    resize: none;
-    padding: 0.4rem;
-    white-space: nowrap;
-    border-radius: 0;
-  }
-}
-
 .step4-content-container {
   min-height: 40rem;
   overflow: auto;
@@ -2134,5 +2090,11 @@ body {
   box-shadow: 0px 1px 5px 1px var(--el-border-color);
   z-index: 2001;
   display: none;
+}
+
+.cr-tables-empty {
+  text-align: center;
+  margin: 5rem;
+  color: silver;
 }
 </style>
