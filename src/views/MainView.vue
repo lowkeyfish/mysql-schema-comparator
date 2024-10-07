@@ -248,7 +248,7 @@ function copySqlOnClick(isSource, type) {
   })
 }
 
-function readCsvOrElsxFileToJson(file, jsonHandler) {
+function readCsvOrXlsxFileToJson(file, jsonHandler) {
   let fileExtension = file.name.toLowerCase().split('.').pop()
 
   if (fileExtension === 'csv') {
@@ -385,7 +385,7 @@ function fileOnChange(isSource, type) {
     return
   }
 
-  readCsvOrElsxFileToJson(file, (keys, json) => {
+  readCsvOrXlsxFileToJson(file, (keys, json) => {
     let schemaValid
     let message
     if (type === 'tables') {
@@ -1745,7 +1745,9 @@ function copyFinalSqlOnClick() {
       </div>
     </div>
   </div>
-  <div class="copyright">&copy; YuJunyang</div>
+  <div class="copyright">
+    <a href="https://github.com/lowkeyfish" target="_blank">&copy; YuJunyang</a>
+  </div>
 </template>
 
 <style lang="scss">
@@ -2125,5 +2127,9 @@ body {
   bottom: 0;
   padding: 1rem 2rem;
   color: #a8abb2;
+  a {
+    text-decoration: none;
+    color: #a8abb2;
+  }
 }
 </style>
