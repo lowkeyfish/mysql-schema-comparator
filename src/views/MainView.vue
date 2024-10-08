@@ -1767,7 +1767,6 @@ body {
   flex-direction: row;
   align-items: center;
   padding: 0 2rem;
-  // border: 1px solid red;
 }
 .page-header-right {
   flex-grow: 1;
@@ -1796,8 +1795,6 @@ body {
 
 .step-tabs {
   height: 4rem;
-  // padding-bottom: 3rem;
-  // border: 1px solid red;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1858,24 +1855,17 @@ body {
 }
 
 .step-content-container {
-  // flex-grow: 1;
-  // padding: 3rem 2rem;
   box-sizing: border-box;
   width: 84rem;
   box-shadow: 0px 0px 12px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
   border: 1px solid var(--el-border-color-light);
-  // overflow: auto;
   margin: 2rem 0 3rem 0;
-  // height: 0;
-  // flex-grow: 1;
 }
 
 .step-nav {
   width: 84rem;
   display: flex;
-  // height: 6rem;
-  // min-height: 6rem;
   flex-direction: row;
   align-self: center;
   align-items: center;
@@ -1930,17 +1920,6 @@ body {
   flex-direction: row;
   justify-content: space-between;
   padding: 3rem 2rem;
-  // width: 80rem;
-}
-
-.step2-content-left {
-  // border: 1px solid red;
-  // padding: 3rem 2rem;
-}
-
-.step2-content-right {
-  // border: 1px solid red;
-  // padding: 3rem 2rem;
 }
 
 .step3-content-container {
@@ -1969,7 +1948,7 @@ body {
   overflow: auto;
   padding: 0 1rem;
   position: relative;
-  min-height: 40rem;
+  min-height: 20rem;
 }
 
 .cr-table-header {
@@ -2092,12 +2071,14 @@ body {
 }
 
 .step4-content-container {
-  min-height: 40rem;
+  min-height: 20rem;
   overflow: auto;
   padding: 1rem;
 
   pre {
     margin: 0;
+    font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+      '微软雅黑', Arial, sans-serif;
   }
 }
 
