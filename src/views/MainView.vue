@@ -47,6 +47,8 @@ let displayDatabase = ref('target') // source, target
 let displayTable = ref('difference') // all, difference
 let finalSql = ref('')
 let finalSqlHighlightHtml = ref('')
+let year = ref('')
+year.value = new Date().getFullYear()
 
 let isStepActivated = computed(() => {
   return (s) => s === step.value
@@ -1746,7 +1748,7 @@ function copyFinalSqlOnClick() {
     </div>
   </div>
   <div class="copyright">
-    <a href="https://github.com/lowkeyfish" target="_blank">&copy; YuJunyang</a>
+    <a href="https://github.com/lowkeyfish" target="_blank">&copy; {{ year }} YuJunyang</a>
   </div>
 </template>
 
